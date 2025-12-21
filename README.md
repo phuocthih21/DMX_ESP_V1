@@ -1,32 +1,68 @@
-# _Sample project_
+# DMX_ESP_V1 🔧💡
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+**Mô tả ngắn:**
+Firmware cho ESP32‑S3 dùng để điều khiển thiết bị DMX, kèm giao diện mạng và web frontend. Dự án tổ chức theo mô-đun (components) với tài liệu thiết kế và API trong thư mục `Doc_all/`.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+---
 
+## 🚀 Tính năng chính
+- Điều khiển DMX (module: `mod_dmx`)
+- Giao tiếp mạng và cấu hình (module: `mod_net`)
+- Giao thức điều khiển nội bộ (module: `mod_proto`)
+- API web và backend (module: `mod_web`) cùng frontend (thư mục `frontend/`)
+- Module trạng thái/giám sát (module: `mod_status`)
 
+## 📁 Cấu trúc dự án (tóm tắt)
+- `main/` — mã nguồn firmware chính
+- `components/` — các module firmware (mod_dmx, mod_net, mod_proto, ...)
+- `frontend/` — giao diện web (vite + npm)
+- `Doc_all/` — tài liệu thiết kế, API, hướng dẫn
+- `build/`, `sdkconfig*`, `CMakeLists.txt` — cấu hình build ESP‑IDF
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+## 🧰 Yêu cầu môi trường
+- ESP32‑S3 (target)
+- ESP‑IDF (đã thử nghiệm với v5.2.6)
+- Node.js & npm (để chạy/build frontend)
 
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
+## 🛠 Hướng dẫn nhanh — Firmware (ESP‑IDF)
+1. Thiết lập ESP‑IDF (PowerShell ví dụ):
+```powershell
+# set IDF_PATH nếu cần
+$env:IDF_PATH = 'E:/Espressif/frameworks/esp-idf-v5.2.6/'
+. $env:IDF_PATH/export.ps1
 ```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
+2. Cấu hình và build:
+```bash
+idf.py set-target esp32s3
+idf.py menuconfig
+idf.py build
+idf.py -p <COM_PORT> flash monitor
 ```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+
+## 🖥 Frontend (phát triển / chạy)
+```bash
+cd frontend
+npm install
+npm run dev     # chạy dev server
+npm run build   # build production
+```
+> Giao diện web truy cập tại: `http://<device_ip>/` (xem `Doc_all/` để biết API chi tiết)
+
+## ⚙️ Cấu hình & Tài liệu
+- Cấu hình firmware: `sdkconfig`, `partitions.csv`
+- Tài liệu thiết kế/API: xem `Doc_all/` (API‑Contract, ARCHITECTURE, MOD_*)
+
+## 🧪 Kiểm thử & Debug
+- Sử dụng `idf.py monitor` để xem log thiết bị.
+- Frontend: dùng console dev (vite) để debug giao diện.
+
+## 🤝 Contributing
+- Mở issue hoặc PR; xem `ISSUES_PROGRESS.md` và `README_ISSUES.md` để biết tiến trình.
+- Viết mô tả thay đổi rõ ràng khi tạo PR.
+
+## 📄 License
+Hiện tại repo chưa có file `LICENSE` — vui lòng xác nhận license mong muốn (ví dụ MIT) để mình thêm vào.
+
+---
+
+Nếu bạn muốn mình chỉnh sửa (thêm badges, ảnh, English translation) hoặc ghi file này vào repo, trả lời kèm tùy chọn bạn muốn: (1) Ghi thay thế ngay, (2) Ghi sang `README.md` giữ nguyên bản cũ thành `README.old.md` trước khi thay, (3) Chỉnh nội dung.
