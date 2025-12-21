@@ -7,6 +7,7 @@
 #include "lwip/inet.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "mod_proto.h" // metrics API
 
 static const char *TAG = "mod_proto.sacn";
 
@@ -46,6 +47,7 @@ static esp_err_t sacn_socket_join(int sock, uint16_t uni)
 
     if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         ESP_LOGW(TAG, "Failed to join %s: %s", mcast_ip, strerror(errno));
+        mod_proto_metrics_inc_igmp_failure();
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "Joined multicast %s (universe %u)", mcast_ip, uni);
@@ -66,6 +68,7 @@ static esp_err_t sacn_socket_leave(int sock, uint16_t uni)
 
     if (setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         ESP_LOGW(TAG, "Failed to drop membership %s: %s", mcast_ip, strerror(errno));
+        mod_proto_metrics_inc_igmp_failure();
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "Left multicast %s (universe %u)", mcast_ip, uni);
@@ -92,7 +95,10 @@ int parse_sacn_packet(const uint8_t *buf, ssize_t buflen, uint16_t *out_universe
 
     /* DMP prop_val_count at offset 123..124 (big-endian) */
     uint16_t prop_val_count = (uint16_t)buf[123] << 8 | (uint16_t)buf[124];
-    if (prop_val_count == 0 || prop_val_count > 513) return 0;
+    if (prop_val_count == 0 || prop_val_count > 513) {
+        mod_proto_metrics_inc_malformed_sacn();
+        return 0;
+    }
 
     const uint8_t *data = &buf[125]; /* start code + 512 data */
     uint16_t dlen = prop_val_count - 1; /* subtract start code */

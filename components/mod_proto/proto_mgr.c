@@ -39,6 +39,7 @@ static int make_udp_socket(const char *bind_addr, uint16_t port)
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         ESP_LOGE(TAG, "socket() failed: %s", strerror(errno));
+        mod_proto_metrics_inc_socket_error();
         return -1;
     }
 
@@ -55,6 +56,7 @@ static int make_udp_socket(const char *bind_addr, uint16_t port)
 
     if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         ESP_LOGE(TAG, "bind() failed: %s", strerror(errno));
+        mod_proto_metrics_inc_socket_error();
         close(sock);
         return -1;
     }

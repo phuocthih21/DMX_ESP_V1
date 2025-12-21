@@ -2,6 +2,7 @@
 #include <string.h>
 #include "sdkconfig.h"
 #include "esp_log.h"
+#include "mod_proto.h" // metrics API
 
 static const char *TAG = "mod_proto.artnet";
 
@@ -31,7 +32,11 @@ int parse_artnet_packet(const uint8_t *buf, _ssize_t buflen, uint16_t *out_unive
     uint16_t length = ((uint16_t)buf[16] << 8) | (uint16_t)buf[17]; /* big-endian */
     if (length > 512) length = 512;
 
-    if (buflen < 18 + length) return 0;
+    if (length == 0 || buflen < 18 + length) {
+        /* packet claims to be ArtDMX but length is inconsistent */
+        mod_proto_metrics_inc_malformed_artnet();
+        return 0;
+    }
 
     *out_universe = universe;
     *out_data = &buf[18];

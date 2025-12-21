@@ -105,6 +105,39 @@ void test_ltp_merge(void)
     TEST_ASSERT_EQUAL_HEX8(200, out[1]);
 }
 
+void test_artnet_malformed_length(void)
+{
+    uint8_t buf[18]; memset(buf, 0, sizeof(buf));
+    memcpy(buf, "Art-Net", 7);
+    /* opcode little-endian 0x5000 */
+    buf[8] = 0x00; buf[9] = 0x50;
+    /* set length to 0x0010 but actual buflen is 18 (no payload) */
+    buf[16] = 0x00; buf[17] = 0x10;
+
+    mod_proto_metrics_t before, after;
+    mod_proto_get_metrics(&before);
+    int rc = parse_artnet_packet(buf, sizeof(buf), NULL, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(0, rc);
+    mod_proto_get_metrics(&after);
+    TEST_ASSERT_EQUAL_UINT32(before.malformed_artnet_packets + 1, after.malformed_artnet_packets);
+}
+
+void test_sacn_malformed_prop_val_count(void)
+{
+    uint8_t buf[128]; memset(buf, 0, sizeof(buf));
+    /* make it look like sACN */
+    memcpy(&buf[4], "ASC-E1.17", 8);
+    /* set prop_val_count to 0 */
+    buf[123] = 0x00; buf[124] = 0x00;
+
+    mod_proto_metrics_t before, after;
+    mod_proto_get_metrics(&before);
+    int rc = parse_sacn_packet(buf, sizeof(buf), NULL, NULL, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(0, rc);
+    mod_proto_get_metrics(&after);
+    TEST_ASSERT_EQUAL_UINT32(before.malformed_sacn_packets + 1, after.malformed_sacn_packets);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -115,6 +148,8 @@ int main(void)
     RUN_TEST(test_proto_reload_join_leave);
     RUN_TEST(test_priority_override);
     RUN_TEST(test_priority_override_ltp);
+    RUN_TEST(test_artnet_malformed_length);
+    RUN_TEST(test_sacn_malformed_prop_val_count);
     return UNITY_END();
 }
 

@@ -47,6 +47,24 @@ uint8_t    mod_proto_get_merge_mode(int port_idx);
  */
 esp_err_t mod_proto_join_universe(uint8_t protocol, uint16_t universe);
 
+/* ===== Metrics API ===== */
+
+typedef struct {
+    uint32_t malformed_artnet_packets;
+    uint32_t malformed_sacn_packets;
+    uint32_t socket_errors;
+    uint32_t igmp_failures;
+} mod_proto_metrics_t;
+
+/** Populate metrics (atomic-safe snapshot). */
+void mod_proto_get_metrics(mod_proto_metrics_t *out);
+
+/** Increment counters (used internally by parsers/sockets) */
+void mod_proto_metrics_inc_malformed_artnet(void);
+void mod_proto_metrics_inc_malformed_sacn(void);
+void mod_proto_metrics_inc_socket_error(void);
+void mod_proto_metrics_inc_igmp_failure(void);
+
 #ifdef __cplusplus
 }
 #endif

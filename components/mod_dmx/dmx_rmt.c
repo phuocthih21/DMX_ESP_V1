@@ -8,7 +8,7 @@
 
 #include "sys_mod.h"
 #include "mod_dmx.h"
-#include "driver/rmt.h"
+#include "driver/rmt_tx.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"

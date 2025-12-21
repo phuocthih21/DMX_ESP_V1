@@ -14,7 +14,7 @@
 |---:|---|---|---|
 | 1, 6 | Implement sACN Priority Handling in Merge Engine | ✅ Implemented & tested | `components/mod_proto/merge.c` contains priority logic; tests: `components/mod_proto/test/unit_test/main/test_proto.c` (`test_priority_override`, `test_priority_override_ltp`). Ready to close. |
 | 5 | Implement sACN IGMP Join/Leave & `proto_reload_config` | ✅ Implemented & tested | Implemented in `components/mod_proto/sacn.c` and `components/mod_proto/proto_mgr.c` (`sacn_join_universe`, `sacn_apply_memberships_for_socket`, `proto_reload_config`). Unit test: `test_proto_reload_join_leave`. |
-| 4, 13, 11 | Add Logging/Telemetry and Accurate FPS/CPU metrics / `/api/health` | ⚠️ Not implemented | No `/api/health` or `/api/metrics` endpoints found; need to design metrics counters and API. Frontend has `SystemMetrics` component expecting metrics. |
+| 4, 13, 11 | Add Logging/Telemetry and Accurate FPS/CPU metrics / `/api/health` | 🟡 Partially implemented | Added atomic counters for protocol telemetry (malformed packets, socket errors, IGMP failures) in `components/mod_proto` and unit tests for malformed packet detection. Still need `/api/health` HTTP handler, WebSocket metrics and CPU/FPS sampling integration. Frontend `SystemMetrics` needs wiring to the API. |
 | 7 | Add Authentication & Protect Sensitive Web API Endpoints | ✅ Implemented (partially) | Authentication subsystem implemented in `components/mod_web/mod_web_auth.*` (NVS-hashed password, bearer tokens). Protected admin endpoints now include `/api/sys/reboot`, `/api/sys/factory`, `/api/net/config`, and `/api/dmx/config`. Added unit tests for auth helpers. |
 | 2, 9 | Implement Static IP Apply & Robust `net_reload_config()` | ⚠️ Partially implemented | `net_eth.c` and `net_wifi.c` apply static IP when interfaces start, but `net_reload_config()` TODO needs implementing to apply static IP to running netifs and to handle interface switching smoothly. |
 | 3, 10 | Make `dmx_apply_new_timing()` Enforce Immediate Apply | ⚠️ Not implemented | `components/mod_dmx/dmx_core.c` currently documents immediate apply as TODO; implementation needed to force driver update in-frame. |
@@ -40,6 +40,7 @@
 ## 📋 Reporting / Next actions I'll take now
 - Create a PR for each implemented fix and close issues that are already implemented (1/6 and 5) — pending your confirmation or review.  
 - Start implementing **Authentication** (#7) next; I'll open a branch and add an incremental PR with middleware + tests.  
+- Implemented basic protocol telemetry counters and unit tests to detect malformed Art-Net/sACN packets; next step is to expose these via `/api/health` and add frontend integration.  
 
 ---
 
