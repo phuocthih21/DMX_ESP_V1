@@ -1,0 +1,33 @@
+menu "MOD_NET configuration"
+
+config MODNET_ENABLE_W5500
+    bool "Enable W5500 driver"
+    default y
+    help
+      Enable the W5500 SPI Ethernet driver. Requires ETH SPI pins to be defined.
+
+config MODNET_ETH_MISO_GPIO
+    int "Ethernet MISO GPIO"
+    default 12
+
+config MODNET_ETH_MOSI_GPIO
+    int "Ethernet MOSI GPIO"
+    default 13
+
+config MODNET_ETH_SCLK_GPIO
+    int "Ethernet SCLK GPIO"
+    default 14
+
+config MODNET_ETH_CS_GPIO
+    int "Ethernet CS GPIO"
+    default 15
+
+config MODNET_ETH_INT_GPIO
+    int "Ethernet INT GPIO"
+    default 16
+
+config MODNET_ETH_RST_GPIO
+    int "Ethernet RST GPIO"
+    default 17
+
+endmenu

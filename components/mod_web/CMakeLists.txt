@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "src/mod_web.c"
+        "src/mod_web_server.c"
+        "src/mod_web_routes.c"
+        "src/mod_web_api.c"
+        "src/mod_web_static.c"
+        "src/mod_web_ws.c"
+        "src/mod_web_json.c"
+        "src/mod_web_validation.c"
+        "src/mod_web_error.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        esp_http_server
+        cJSON
+        sys_mod
+        mod_net
+        esp_timer
+        freertos
+        esp_system
+)
+

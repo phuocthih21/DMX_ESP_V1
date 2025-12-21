@@ -1,0 +1,13 @@
+idf_component_register(
+    SRCS 
+        "mod_status.c"
+        "led_driver.c"
+        "led_patterns.c"
+        "led_strip_encoder.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        driver
+        esp_timer
+        freertos
+)

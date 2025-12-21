@@ -1,0 +1,68 @@
+### GIAI ĐOẠN 1: NỀN MÓNG (FOUNDATION)
+
+*Mục tiêu: Xây dựng các cấu trúc dữ liệu dùng chung và cơ chế quản lý cấu hình.*
+
+**1. `SYS_MOD` (Quan trọng nhất)**
+
+* **Prompt file:** (Sử dụng nội dung trong `MOD_SYS.md` hoặc prompt tự viết dựa trên đó, hiện tại bạn chưa gửi file `promt_SYS_MOD.md` riêng biệt, nhưng có file thiết kế `SYS_MOD.md`. Bạn cần dùng Prompt để sinh code cho module này đầu tiên).
+* **Lý do:** Đây là "trái tim" chứa `dmx_types.h`, config struct, NVS manager. Tất cả các module khác đều phải `#include "sys_mod.h"`. Nếu không có nó, không module nào biên dịch được.
+
+**2. `promt_SYS_MOD-API-CONTRACT.md**`
+
+* **Mục tiêu:** Sinh ra **Mock Server** (Node.js/Python).
+* **Lý do:** Để team Frontend có thể làm việc ngay lập tức mà không cần chờ Firmware xong. Nó chốt hạ giao thức giao tiếp JSON.
+
+---
+
+### GIAI ĐOẠN 2: PHÁT TRIỂN SONG SONG (PARALLEL TRACKS)
+
+#### Luồng A: Firmware (ESP32 C Code)
+
+**3. `MOD_STATUS` (Prompt: `MOD_STATUS.md` - phần prompt)**
+
+* **Lý do:** Module đơn giản nhất, ít phụ thuộc. Giúp bạn có đèn LED để debug (biết hệ thống sống hay chết) khi tích hợp các module phức tạp sau này.
+
+**4. `MOD_STARTUP` (Prompt: `MOD_STARTUP.MD`)**
+
+* **Lý do:** Xử lý việc boot an toàn. Nó cần `SYS_MOD` (để check NVS) và `MOD_STATUS` (để báo đèn). Cần xong sớm để tránh boot loop khi code sai.
+
+**5. `MOD_DMX` (Prompt: `MOD_DMX.MD`)**
+
+* **Lý do:** Module độc lập về logic (chỉ cần lấy dữ liệu từ buffer của `SYS_MOD`). Cần làm sớm để đo đạc tín hiệu trên máy hiện sóng (Oscilloscope).
+
+**6. `MOD_NET` (Prompt: `MOD_NET.MD`)**
+
+* **Lý do:** Cung cấp kết nối mạng. Các module Web và Proto cần module này để khởi tạo socket.
+
+**7. `MOD_PROTO` (Prompt: `MOD_PROTO.MD`)**
+
+* **Lý do:** Xử lý Art-Net/sACN. Cần `MOD_NET` để có UDP socket và `SYS_MOD` để ghi dữ liệu vào buffer.
+
+#### Luồng B: Web Application (Frontend)
+
+**8. `promt_frontend.md**`
+
+* **Lý do:** Xây dựng giao diện React. Frontend sẽ gọi vào Mock Server (đã tạo ở bước 2) để test logic.
+* **Kết quả:** Sau bước này, bạn phải chạy lệnh `npm run build` để ra folder `dist/` chứa file `.html`, `.js`, `.css`.
+
+---
+
+### GIAI ĐOẠN 3: TÍCH HỢP WEB VÀO FIRMWARE (INTEGRATION)
+
+**9. `prromt_web-mod_backend.md**`
+
+* **Lý do:** Module này cần file `dist/` từ **Bước 8** để nén Gzip và nhúng (embed) vào firmware C. Nó cũng cần `SYS_MOD` để gọi hàm lưu config và `MOD_NET` để chạy HTTP Server.
+
+**10. `promt_WEBSOCKET-REALTIME.md**`
+
+* **Lý do:** Bổ sung tính năng realtime vào backend. Làm sau cùng để đảm bảo các API cơ bản (REST) đã chạy ổn định trước.
+
+---
+
+### GIAI ĐOẠN 4: HOÀN THIỆN HỆ THỐNG (SYSTEM GLUE)
+
+**11. `MAIN.MD**`
+
+* **Lý do:** Đây là bước cuối cùng. File `main.c` sẽ include header của TẤT CẢ các module trên (`sys_mod.h`, `net.h`, `dmx.h`...) và gọi hàm init theo đúng thứ tự.
+* *Thứ tự init trong main.c:* `Startup Check` -> `NVS` -> `SYS_MOD` -> `STATUS` -> `NET` -> `WEB` -> `PROTO` -> `DMX`.
+

@@ -1,0 +1,18 @@
+idf_component_register(
+    SRCS 
+        "sys_mod.c"
+        "sys_config.c"
+        "sys_nvs.c"
+        "sys_buffer.c"
+        "sys_route.c"
+        "sys_snapshot.c"
+        "sys_setup.c"
+        "sys_mod_api.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        nvs_flash
+        esp_timer
+        esp_event
+        freertos
+)

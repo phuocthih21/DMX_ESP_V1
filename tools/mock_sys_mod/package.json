@@ -1,0 +1,14 @@
+{
+  "name": "mock-sys-mod",
+  "version": "1.0.0",
+  "description": "Mock SYS_MOD server for frontend development",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.13.0",
+    "cors": "^2.8.5"
+  }
+}
