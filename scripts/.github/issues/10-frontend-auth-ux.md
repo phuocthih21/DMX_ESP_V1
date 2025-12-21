@@ -1,6 +1,6 @@
 # Frontend: Add Auth UX & Align Endpoints
-Labels: P3,feature
-Assignees: copilot AI
+Labels: P2,feature
+Assignees: @me
 
 **Description**
 

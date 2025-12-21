@@ -1,6 +1,6 @@
 # Implement sACN Priority Handling in Merge Engine
 Labels: P0,bug
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

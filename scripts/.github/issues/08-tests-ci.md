@@ -1,6 +1,6 @@
 # Expand Unit / Integration Tests & Add CI
 Labels: P2,testing
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

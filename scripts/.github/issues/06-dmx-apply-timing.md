@@ -1,6 +1,6 @@
 # Make `dmx_apply_new_timing()` Enforce Immediate Apply
 Labels: P1,enhancement
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

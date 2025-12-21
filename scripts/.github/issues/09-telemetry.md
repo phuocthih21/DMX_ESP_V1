@@ -1,6 +1,6 @@
 # Add Logging/Telemetry and Malformed Packet Counters
 Labels: P2,enhancement
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

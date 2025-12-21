@@ -1,6 +1,6 @@
 # Add HTTPS/TLS Support or Document Reverse-Proxy Setup
 Labels: P1,feature
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

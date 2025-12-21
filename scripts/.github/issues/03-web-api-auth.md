@@ -1,6 +1,6 @@
 # Add Authentication & Protect Sensitive Web API Endpoints
 Labels: P0,security
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

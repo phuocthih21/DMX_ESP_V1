@@ -1,6 +1,6 @@
 # Implement sACN IGMP Join/Leave & proto_reload_config
 Labels: P0,feature
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

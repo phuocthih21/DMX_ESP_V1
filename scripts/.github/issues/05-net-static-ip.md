@@ -1,6 +1,6 @@
 # Implement Static IP Apply & Robust `net_reload_config`
 Labels: P1,bug
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 

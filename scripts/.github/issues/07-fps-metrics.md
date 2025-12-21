@@ -1,6 +1,6 @@
 # Add Accurate FPS/CPU Metrics & `/api/health`
 Labels: P2,feature
-Assignees: copilot AI
+Assignees: @me
 
 **Description**
 
