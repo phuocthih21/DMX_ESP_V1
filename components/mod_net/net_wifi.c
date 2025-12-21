@@ -7,6 +7,8 @@
 #include <string.h>
 
 static const char* TAG = "NET_WIFI";
+static esp_netif_t* s_sta_netif = NULL;
+static esp_netif_t* s_ap_netif = NULL;
 
 esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
     ESP_LOGI(TAG, "Starting WiFi STA (SSID=%s)", ssid ? ssid : "<null>");
@@ -18,7 +20,16 @@ esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
     }
 
     // Create default STA netif and capture pointer
-    esp_netif_t* sta_netif = esp_netif_create_default_wifi_sta();
+    if (!s_sta_netif) {
+        s_sta_netif = esp_netif_create_default_wifi_sta();
+        if (!s_sta_netif) {
+            ESP_LOGE(TAG, "Failed to create WiFi STA netif");
+            return ESP_FAIL;
+        }
+    } else {
+        ESP_LOGI(TAG, "WiFi STA netif already exists");
+    }
+    esp_netif_t* sta_netif = s_sta_netif;
 
     // Apply static IP if configured
     const sys_config_t* cfg = sys_get_config();
@@ -82,7 +93,15 @@ esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
     }
 
     // Create default AP netif
-    esp_netif_create_default_wifi_ap();
+    if (!s_ap_netif) {
+        s_ap_netif = esp_netif_create_default_wifi_ap();
+        if (!s_ap_netif) {
+            ESP_LOGE(TAG, "Failed to create WiFi AP netif");
+            return ESP_FAIL;
+        }
+    } else {
+        ESP_LOGI(TAG, "WiFi AP netif already exists");
+    }
 
     wifi_config_t wifi_config = {0};
     if (ssid) {
@@ -131,5 +150,17 @@ esp_err_t net_wifi_stop(void) {
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "esp_wifi_set_mode NULL failed: %d", ret);
     }
+
+    if (s_sta_netif) {
+        ESP_LOGI(TAG, "Destroying WiFi STA netif");
+        esp_netif_destroy(s_sta_netif);
+        s_sta_netif = NULL;
+    }
+    if (s_ap_netif) {
+        ESP_LOGI(TAG, "Destroying WiFi AP netif");
+        esp_netif_destroy(s_ap_netif);
+        s_ap_netif = NULL;
+    }
+
     return ESP_OK;
 }
