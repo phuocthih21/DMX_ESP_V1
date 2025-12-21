@@ -2,6 +2,10 @@
 #include "mod_proto.h"
 #include "proto_types.h"
 
+/* sacn helpers (internal) used by tests */
+extern size_t sacn_get_joined_universes(uint16_t *out, size_t max);
+
+
 /* Minimal unit tests for parsers and merge logic */
 
 void setUp(void) {}
@@ -108,5 +112,95 @@ int main(void)
     RUN_TEST(test_sacn_parse);
     RUN_TEST(test_htp_merge);
     RUN_TEST(test_ltp_merge);
+    RUN_TEST(test_proto_reload_join_leave);
+    RUN_TEST(test_priority_override);
+    RUN_TEST(test_priority_override_ltp);
     return UNITY_END();
+}
+
+void test_proto_reload_join_leave(void)
+{
+    // Ensure proto stack is running and registered for events
+    mod_proto_init();
+
+    // Start with no joins
+    uint16_t out[64];
+    size_t n = sacn_get_joined_universes(out, 64);
+
+    // Apply DMX config: port0 -> sACN universe 1, port1 -> sACN universe 2
+    sys_dmx_port_status_t cfg[4];
+    memset(cfg, 0, sizeof(cfg));
+    cfg[0].enabled = true; cfg[0].protocol = PROTOCOL_SACN; cfg[0].universe = 1; cfg[0].fps = 40;
+    cfg[1].enabled = true; cfg[1].protocol = PROTOCOL_SACN; cfg[1].universe = 2; cfg[1].fps = 40;
+
+    TEST_ASSERT_EQUAL_INT(SYS_OK, sys_apply_dmx_config(cfg, 4));
+
+    // Now joined universes should include 1 and 2
+    n = sacn_get_joined_universes(out, 64);
+    bool has1 = false, has2 = false;
+    for (size_t i = 0; i < n; ++i) {
+        if (out[i] == 1) has1 = true;
+        if (out[i] == 2) has2 = true;
+    }
+    TEST_ASSERT_TRUE(has1);
+    TEST_ASSERT_TRUE(has2);
+
+    // Change config: only port0 -> sACN universe 3
+    memset(cfg, 0, sizeof(cfg));
+    cfg[0].enabled = true; cfg[0].protocol = PROTOCOL_SACN; cfg[0].universe = 3; cfg[0].fps = 40;
+
+    TEST_ASSERT_EQUAL_INT(SYS_OK, sys_apply_dmx_config(cfg, 4));
+
+    // Now joined universes should include 3 and not include 1
+    n = sacn_get_joined_universes(out, 64);
+    has1 = false; bool has3 = false;
+    for (size_t i = 0; i < n; ++i) {
+        if (out[i] == 1) has1 = true;
+        if (out[i] == 3) has3 = true;
+    }
+    TEST_ASSERT_FALSE(has1);
+    TEST_ASSERT_TRUE(has3);
+
+    mod_proto_deinit();
+}
+
+void test_priority_override(void)
+{
+    merge_init();
+
+    uint8_t a[DMX_UNIVERSE_SIZE]; uint8_t b[DMX_UNIVERSE_SIZE];
+    memset(a, 0, sizeof(a)); memset(b, 0, sizeof(b));
+    a[0] = 10; a[1] = 20;
+    b[0] = 200; b[1] = 30;
+
+    // a lower priority, b higher -> b should win entirely
+    merge_input_by_universe(0, a, DMX_UNIVERSE_SIZE, 50, 0x01000001);
+    merge_input_by_universe(0, b, DMX_UNIVERSE_SIZE, 100, 0x02000002);
+
+    uint8_t *out = sys_get_dmx_buffer(0);
+    TEST_ASSERT_NOT_NULL(out);
+    TEST_ASSERT_EQUAL_HEX8(200, out[0]);
+    TEST_ASSERT_EQUAL_HEX8(30, out[1]);
+}
+
+void test_priority_override_ltp(void)
+{
+    merge_init();
+    // set runtime to LTP
+    mod_proto_set_merge_mode(0, MERGE_MODE_LTP);
+
+    uint8_t a[DMX_UNIVERSE_SIZE]; uint8_t b[DMX_UNIVERSE_SIZE];
+    memset(a, 0, sizeof(a)); memset(b, 0, sizeof(b));
+    a[0] = 10; a[1] = 20;
+    b[0] = 200; b[1] = 30;
+
+    // a lower priority, b higher -> b should win entirely despite LTP semantics
+    merge_input_by_universe(0, a, DMX_UNIVERSE_SIZE, 50, 0x01000001);
+    merge_input_by_universe(0, b, DMX_UNIVERSE_SIZE, 100, 0x02000002);
+
+    uint8_t *out = sys_get_dmx_buffer(0);
+    TEST_ASSERT_NOT_NULL(out);
+    TEST_ASSERT_EQUAL_HEX8(200, out[0]);
+    TEST_ASSERT_EQUAL_HEX8(30, out[1]);
+}
 }

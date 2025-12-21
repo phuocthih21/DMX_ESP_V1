@@ -14,10 +14,14 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sys_event.h"
 
 static const char *TAG = "mod_proto";
 static TaskHandle_t s_proto_task = NULL;
 static volatile bool s_task_stop = false;
+
+/* Forward declaration for system event callback (used when registering/unregistering callbacks) */
+static void proto_sys_event_cb(const sys_evt_msg_t *evt, void *user_ctx);
 
 /* Forward declarations of merge/parsers in this component */
 int merge_input_by_universe(uint16_t universe, const uint8_t *data, size_t len, uint8_t priority, uint32_t src_ip);
@@ -63,6 +67,11 @@ static void proto_task(void *arg)
     ESP_LOGI(TAG, "proto_task started");
     int artnet_sock = make_udp_socket(NULL, ARTNET_PORT);
     int sacn_sock = make_udp_socket(NULL, SACN_PORT);
+
+    /* Apply any queued sACN memberships when socket becomes available */
+    extern void sacn_apply_memberships_for_socket(int sock);
+    extern void sacn_clear_socket(void);
+    if (sacn_sock >= 0) sacn_apply_memberships_for_socket(sacn_sock);
 
     uint8_t rxbuf[RX_BUFFER_SIZE];
 
@@ -112,7 +121,11 @@ static void proto_task(void *arg)
     }
 
     if (artnet_sock >= 0) close(artnet_sock);
-    if (sacn_sock >= 0) close(sacn_sock);
+    if (sacn_sock >= 0) {
+        extern void sacn_clear_socket(void);
+        sacn_clear_socket();
+        close(sacn_sock);
+    }
 
     ESP_LOGI(TAG, "proto_task exiting");
     s_proto_task = NULL;
@@ -133,6 +146,14 @@ esp_err_t mod_proto_init(void)
         s_proto_task = NULL;
         return ESP_ERR_NO_MEM;
     }
+
+    /* Register for system config events so we can reload proto mappings */
+    /* Reference the callback to avoid compiler warnings in some builds */
+    (void)proto_sys_event_cb;
+    if (sys_event_register_cb(proto_sys_event_cb, NULL) != 0) {
+        ESP_LOGW(TAG, "Failed to register system event callback");
+    }
+
     return ESP_OK;
 }
 
@@ -140,9 +161,26 @@ esp_err_t mod_proto_deinit(void)
 {
     if (!s_proto_task) return ESP_ERR_INVALID_STATE;
     s_task_stop = true;
+
+    // Unregister from system events
+    sys_event_unregister_cb(proto_sys_event_cb, NULL);
+
     /* Wait for task to exit */
     while (s_proto_task) { vTaskDelay(pdMS_TO_TICKS(50)); }
     return ESP_OK;
+}
+
+/* ===== System events ===== */
+static void proto_sys_event_cb(const sys_evt_msg_t *evt, void *user_ctx) __attribute__((used));
+
+static void proto_sys_event_cb(const sys_evt_msg_t *evt, void *user_ctx)
+{
+    (void)user_ctx;
+    if (!evt) return;
+    if (evt->type == SYS_EVT_CONFIG_APPLIED) {
+        ESP_LOGI(TAG, "proto_sys_event_cb: config applied on port %d, reloading proto config", evt->payload.config_applied.port);
+        proto_reload_config();
+    }
 }
 
 /** Runtime merge mode control */
@@ -179,14 +217,52 @@ esp_err_t proto_start(void)
 
 void proto_reload_config(void)
 {
-    // API Contract: Leave/Join Multicast group based on new universe mapping
-    // Since routing is done dynamically via sys_route_find_port() in merge_input_by_universe(),
-    // the main work here is to re-join sACN multicast groups for newly mapped universes.
-    
-    // For now, this is a no-op since:
-    // 1. Routing is dynamic (reads from sys_config each packet)
-    // 2. sACN multicast join is handled per-packet if needed
-    // 
-    // Future enhancement: Track current multicast groups and leave/join as needed
-    ESP_LOGI(TAG, "proto_reload_config called (routing is dynamic, no action needed)");
+    // Recompute desired sACN universes from system config and apply diffs
+    ESP_LOGI(TAG, "proto_reload_config: checking sACN memberships");
+
+    const sys_config_t *cfg = sys_get_config();
+    if (!cfg) return;
+
+    uint16_t desired[SYS_MAX_PORTS];
+    size_t desired_n = 0;
+
+    for (int i = 0; i < SYS_MAX_PORTS; ++i) {
+        /* Copy port cfg to avoid taking address of packed member */
+        dmx_port_cfg_t p = cfg->ports[i];
+        if (p.enabled && p.protocol == PROTOCOL_SACN) {
+            desired[desired_n++] = p.universe;
+        }
+    }
+
+    /* Get currently joined universes from sacn module */
+    extern size_t sacn_get_joined_universes(uint16_t *out, size_t max);
+    extern esp_err_t sacn_join_universe(uint16_t uni);
+    extern esp_err_t sacn_leave_universe(uint16_t uni);
+
+    /* Local maximum for tracking joined universes. Mirrors SACN_MAX_JOINED in sacn.c */
+    #define PROTO_SACN_MAX_JOINED 64
+    uint16_t current[PROTO_SACN_MAX_JOINED];
+    size_t current_n = sacn_get_joined_universes(current, PROTO_SACN_MAX_JOINED);
+
+    /* Join any desired not already in current */
+    for (size_t i = 0; i < desired_n; ++i) {
+        uint16_t u = desired[i];
+        bool found = false;
+        for (size_t j = 0; j < current_n; ++j) if (current[j] == u) { found = true; break; }
+        if (!found) {
+            ESP_LOGI(TAG, "proto_reload_config: joining universe %u", u);
+            sacn_join_universe(u);
+        }
+    }
+
+    /* Leave any current not in desired */
+    for (size_t i = 0; i < current_n; ++i) {
+        uint16_t u = current[i];
+        bool found = false;
+        for (size_t j = 0; j < desired_n; ++j) if (desired[j] == u) { found = true; break; }
+        if (!found) {
+            ESP_LOGI(TAG, "proto_reload_config: leaving universe %u", u);
+            sacn_leave_universe(u);
+        }
+    }
 }

@@ -71,8 +71,14 @@ int merge_input_by_universe(uint16_t universe, const uint8_t *data, size_t len, 
     /* Copy up to DMX_UNIVERSE_SIZE bytes */
     memcpy(target->data, data, DMX_UNIVERSE_SIZE);
 
-    /* Recompute final_data based on merge_mode */
-    if (ctx->merge_mode == MERGE_MODE_HTP) {
+    /* Recompute final_data based on merge_mode and sACN priority rules
+       Priority rule: if both sources are active and have different sACN priority
+       values, the source with the higher priority wins the entire universe. If
+       priorities are equal (or one source inactive), fall back to existing HTP/LTP rules. */
+    if (ctx->source_a.active && ctx->source_b.active && ctx->source_a.priority != ctx->source_b.priority) {
+        proto_source_t *higher = (ctx->source_a.priority > ctx->source_b.priority) ? &ctx->source_a : &ctx->source_b;
+        memcpy(ctx->final_data, higher->data, DMX_UNIVERSE_SIZE);
+    } else if (ctx->merge_mode == MERGE_MODE_HTP) {
         for (int i = 0; i < DMX_UNIVERSE_SIZE; ++i) {
             uint8_t a = ctx->source_a.active ? ctx->source_a.data[i] : 0;
             uint8_t b = ctx->source_b.active ? ctx->source_b.data[i] : 0;
@@ -109,8 +115,11 @@ void merge_check_timeout_ms(uint64_t now_ms)
             /* Source B timed out on this port */
         }
         if (changed) {
-            /* Recompute final and write */
-            if (ctx->merge_mode == MERGE_MODE_HTP) {
+            /* Recompute final and write, honoring sACN priority as above */
+            if (ctx->source_a.active && ctx->source_b.active && ctx->source_a.priority != ctx->source_b.priority) {
+                proto_source_t *higher = (ctx->source_a.priority > ctx->source_b.priority) ? &ctx->source_a : &ctx->source_b;
+                memcpy(ctx->final_data, higher->data, DMX_UNIVERSE_SIZE);
+            } else if (ctx->merge_mode == MERGE_MODE_HTP) {
                 for (int i = 0; i < DMX_UNIVERSE_SIZE; ++i) {
                     uint8_t a = ctx->source_a.active ? ctx->source_a.data[i] : 0;
                     uint8_t b = ctx->source_b.active ? ctx->source_b.data[i] : 0;
