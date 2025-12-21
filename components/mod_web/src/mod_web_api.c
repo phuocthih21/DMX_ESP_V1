@@ -11,6 +11,7 @@
 #include "mod_web_error.h"
 #include "sys_mod.h"
 #include "mod_net.h"
+#include "mod_web_auth.h"
 #include "dmx_types.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
@@ -73,6 +74,13 @@ esp_err_t mod_web_api_system_reboot(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "POST /api/sys/reboot");
 
+    // Require auth for admin actions
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
+
     // Send response before rebooting
     // Per MOD_WEB.md: Response format {"status": "ok"}
     cJSON *root = cJSON_CreateObject();
@@ -91,6 +99,13 @@ esp_err_t mod_web_api_system_reboot(httpd_req_t *req)
 esp_err_t mod_web_api_system_factory(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "POST /api/sys/factory");
+
+    // Require auth for admin actions
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
 
     // Parse request body to check for confirmation
     char buf[256];
@@ -127,6 +142,104 @@ esp_err_t mod_web_api_system_factory(httpd_req_t *req)
     esp_restart();
 
     return ESP_OK;
+}
+
+esp_err_t mod_web_api_auth_login(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "POST /api/auth/login");
+
+    // Read body
+    char buf[256];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        return mod_web_error_send_400(req, "Empty request body");
+    }
+    buf[ret] = '\0';
+
+    cJSON *json = cJSON_Parse(buf);
+    if (json == NULL) {
+        return mod_web_error_send_400(req, "Invalid JSON");
+    }
+
+    cJSON *pw = cJSON_GetObjectItem(json, "password");
+    if (!cJSON_IsString(pw)) {
+        cJSON_Delete(json);
+        return mod_web_error_send_400(req, "Missing password field");
+    }
+
+    const char *password = pw->valuestring;
+
+    if (!mod_web_auth_verify_password(password)) {
+        cJSON_Delete(json);
+        return mod_web_error_send_401(req, "Invalid credentials");
+    }
+
+    // Generate token (8 hours)
+    char *token = mod_web_auth_generate_token(8 * 60 * 60);
+    if (!token) {
+        cJSON_Delete(json);
+        return mod_web_error_send_500(req, "Failed to generate token");
+    }
+
+    // Build response: { token: "...", expires_seconds: 28800 }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "token", token);
+    cJSON_AddNumberToObject(root, "expires_seconds", (double)(8 * 60 * 60));
+
+    esp_err_t r = mod_web_json_send_response(req, root);
+
+    cJSON_Delete(root);
+    free(token);
+    cJSON_Delete(json);
+
+    return r;
+}
+
+esp_err_t mod_web_api_auth_set_password(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "POST /api/auth/set_password");
+
+    // Read body
+    char buf[256];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        return mod_web_error_send_400(req, "Empty request body");
+    }
+    buf[ret] = '\0';
+
+    cJSON *json = cJSON_Parse(buf);
+    if (json == NULL) {
+        return mod_web_error_send_400(req, "Invalid JSON");
+    }
+
+    cJSON *pw = cJSON_GetObjectItem(json, "password");
+    if (!cJSON_IsString(pw)) {
+        cJSON_Delete(json);
+        return mod_web_error_send_400(req, "Missing password field");
+    }
+
+    const char *password = pw->valuestring;
+
+    // If auth already enabled, require auth for password change
+    if (mod_web_auth_is_enabled() && !mod_web_auth_check_request(req)) {
+        cJSON_Delete(json);
+        return mod_web_error_send_401(req, "Authentication required to change password");
+    }
+
+    esp_err_t err = mod_web_auth_set_password(password);
+    if (err != ESP_OK) {
+        cJSON_Delete(json);
+        return mod_web_error_send_500(req, "Failed to set password");
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+
+    esp_err_t r = mod_web_json_send_response(req, root);
+    cJSON_Delete(root);
+    cJSON_Delete(json);
+
+    return r;
 }
 
 /* ========== DMX API HANDLERS ========== */

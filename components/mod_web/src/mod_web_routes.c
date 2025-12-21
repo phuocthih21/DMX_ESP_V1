@@ -76,6 +76,32 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         return ret;
     }
 
+    // POST /api/auth/login (new)
+    httpd_uri_t uri_auth_login = {
+        .uri = "/api/auth/login",
+        .method = HTTP_POST,
+        .handler = mod_web_api_auth_login,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_auth_login);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/auth/login handler");
+        return ret;
+    }
+
+    // POST /api/auth/set_password (initial setup or change)
+    httpd_uri_t uri_auth_setpw = {
+        .uri = "/api/auth/set_password",
+        .method = HTTP_POST,
+        .handler = mod_web_api_auth_set_password,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_auth_setpw);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/auth/set_password handler");
+        return ret;
+    }
+
     // POST /api/sys/reboot (additional endpoint)
     httpd_uri_t uri_sys_reboot = {
         .uri = "/api/sys/reboot",

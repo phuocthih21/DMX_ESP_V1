@@ -73,6 +73,27 @@ function createAxiosInstance(): AxiosInstance {
 export const apiClient = createAxiosInstance();
 
 /**
+ * Set or clear Authorization Bearer token for subsequent requests
+ */
+export function setAuthToken(token: string | null): void {
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    localStorage.setItem('dmx_token', token);
+  } else {
+    delete apiClient.defaults.headers.common['Authorization'];
+    localStorage.removeItem('dmx_token');
+  }
+}
+
+/**
+ * Load token from localStorage and apply to client (call on app start)
+ */
+export function loadStoredAuthToken(): void {
+  const token = localStorage.getItem('dmx_token');
+  if (token) setAuthToken(token);
+}
+
+/**
  * Update base URL (for device IP changes)
  */
 export function updateBaseURL(): void {

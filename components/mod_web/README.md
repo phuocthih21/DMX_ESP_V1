@@ -70,6 +70,21 @@ components/mod_web/
 
 - `ws://<ip>/ws/status` - Realtime status stream
 
+### Authentication
+
+A minimal authentication system is available to protect admin endpoints. New endpoints:
+
+- `POST /api/auth/set_password` - Set admin password. Allowed when no password is set, or when authenticated.
+  - Request body: `{ "password": "<plain>" }`
+- `POST /api/auth/login` - Obtain a Bearer token to authenticate subsequent requests.
+  - Request body: `{ "password": "<plain>" }`
+  - Response: `{ "token": "<hex>", "expires_seconds": 28800 }`
+
+Protected admin endpoints (e.g., `/api/sys/reboot`, `/api/sys/factory`, `/api/net/config`) will return `401 Unauthorized` when authentication is enabled and the request lacks a valid `Authorization: Bearer <token>` header.
+
+Notes:
+- Passwords are stored as a SHA-256 hex hash in NVS (`namespace: auth`, `key: admin_hash`).
+- Session tokens are stored in RAM and expire after a configurable period (8 hours by default).
 ## 🚀 Usage
 
 ### Initialization

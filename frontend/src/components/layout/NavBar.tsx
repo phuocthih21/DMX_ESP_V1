@@ -5,6 +5,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { StatusIndicator } from './StatusIndicator';
+import { login } from '../../api/auth';
+import { setAuthToken } from '../../api/client';
+import { useState } from 'react';
 
 const navItems = [
   { path: '/', label: 'Dashboard' },
@@ -12,6 +15,38 @@ const navItems = [
   { path: '/network', label: 'Network' },
   { path: '/system', label: 'System' },
 ];
+
+const AuthButton: React.FC = () => {
+  const [hasToken, setHasToken] = useState<boolean>(!!localStorage.getItem('dmx_token'));
+
+  const onLogin = async () => {
+    const pw = window.prompt('Enter admin password');
+    if (!pw) return;
+    try {
+      await login(pw);
+      setHasToken(true);
+      alert('Login successful');
+    } catch (err) {
+      alert('Login failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const onLogout = () => {
+    setAuthToken(null);
+    setHasToken(false);
+    alert('Logged out');
+  };
+
+  return hasToken ? (
+    <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={onLogout}>
+      Logout
+    </button>
+  ) : (
+    <button className="px-3 py-1 bg-primary-500 text-white rounded" onClick={onLogin}>
+      Login
+    </button>
+  );
+};
 
 export const NavBar: React.FC = () => {
   const location = useLocation();
@@ -45,6 +80,10 @@ export const NavBar: React.FC = () => {
           </div>
           <div className="flex items-center">
             <StatusIndicator />
+            <div className="ml-4">
+              {/* Simple login/logout button (prompt-based) */}
+              <AuthButton />
+            </div>
           </div>
         </div>
       </div>

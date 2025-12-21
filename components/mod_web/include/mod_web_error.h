@@ -32,6 +32,15 @@ esp_err_t mod_web_error_send_400(httpd_req_t *req, const char *message);
  */
 esp_err_t mod_web_error_send_500(httpd_req_t *req, const char *message);
 
+/**
+ * @brief Send 401 Unauthorized error
+ *
+ * @param req HTTP request handle
+ * @param message Error message
+ * @return ESP_OK
+ */
+esp_err_t mod_web_error_send_401(httpd_req_t *req, const char *message);
+
 #ifdef __cplusplus
 }
 #endif

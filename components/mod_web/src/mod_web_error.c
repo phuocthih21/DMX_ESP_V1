@@ -49,3 +49,19 @@ esp_err_t mod_web_error_send_500(httpd_req_t *req, const char *message)
     return ret;
 }
 
+esp_err_t mod_web_error_send_401(httpd_req_t *req, const char *message)
+{
+    ESP_LOGW(TAG, "401 Unauthorized: %s", message);
+    httpd_resp_set_status(req, "401 Unauthorized");
+    httpd_resp_set_type(req, "application/json");
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "error");
+    cJSON_AddStringToObject(root, "error", message ? message : "Unauthorized");
+
+    esp_err_t ret = mod_web_json_send_response(req, root);
+    cJSON_Delete(root);
+
+    return ret;
+}
+

@@ -7,6 +7,7 @@
 
 #include "mod_web_server.h"
 #include "mod_web_routes.h"
+#include "mod_web_auth.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "esp_system.h"
@@ -67,6 +68,9 @@ esp_err_t mod_web_server_start(void)
     }
 
     ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);
+
+    // Initialize auth subsystem
+    mod_web_auth_init();
 
     // Register all URI handlers
     ret = mod_web_register_routes(s_server_handle);

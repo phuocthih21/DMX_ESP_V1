@@ -37,6 +37,20 @@ esp_err_t mod_web_api_system_reboot(httpd_req_t *req);
  */
 esp_err_t mod_web_api_system_factory(httpd_req_t *req);
 
+/**
+ * @brief POST /api/auth/login
+ *
+ * Returns a short-lived Bearer token on success.
+ */
+esp_err_t mod_web_api_auth_login(httpd_req_t *req);
+
+/**
+ * @brief POST /api/auth/set_password
+ *
+ * Set or change admin password. Allowed only when no password exists or client is authenticated.
+ */
+esp_err_t mod_web_api_auth_set_password(httpd_req_t *req);
+
 /* ========== DMX API Handlers ========== */
 
 /**

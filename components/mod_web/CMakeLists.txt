@@ -4,6 +4,7 @@ idf_component_register(
         "src/mod_web_server.c"
         "src/mod_web_routes.c"
         "src/mod_web_api.c"
+        "src/mod_web_auth.c"
         "src/mod_web_static.c"
         "src/mod_web_ws.c"
         "src/mod_web_json.c"
@@ -19,5 +20,7 @@ idf_component_register(
         esp_timer
         freertos
         esp_system
+        mbedtls
+        nvs_flash
 )
 
