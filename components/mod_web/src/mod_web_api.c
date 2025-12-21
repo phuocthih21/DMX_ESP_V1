@@ -300,6 +300,13 @@ esp_err_t mod_web_api_dmx_config(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "POST /api/dmx/config");
 
+    // Require auth for admin actions
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
+
     // Read request body
     char buf[512];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
@@ -439,6 +446,13 @@ esp_err_t mod_web_api_network_status(httpd_req_t *req)
 esp_err_t mod_web_api_network_config(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "POST /api/net/config");
+
+    // Require auth for admin actions
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
 
     // Read request body
     char buf[1024];

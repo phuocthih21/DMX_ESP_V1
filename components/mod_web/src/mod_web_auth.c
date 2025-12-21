@@ -135,16 +135,9 @@ char *mod_web_auth_generate_token(size_t expiry_seconds)
     return r;
 }
 
-bool mod_web_auth_check_request(httpd_req_t *req)
+static bool mod_web_auth_check_token_str_internal(const char *auth_header)
 {
-    if (!mod_web_auth_is_enabled()) return false;
-    if (!req) return false;
-
-    // Get Authorization header
-    char auth_header[128];
-    size_t hdr_len = httpd_req_get_hdr_value_len(req, "Authorization");
-    if (hdr_len == 0 || hdr_len >= sizeof(auth_header)) return false;
-    httpd_req_get_hdr_value_str(req, "Authorization", auth_header, sizeof(auth_header));
+    if (!auth_header) return false;
 
     // Expect Bearer <token>
     const char *prefix = "Bearer ";
@@ -159,4 +152,24 @@ bool mod_web_auth_check_request(httpd_req_t *req)
     if (s_token_expiry > 0 && now_us > s_token_expiry) return false;
 
     return true;
+}
+
+bool mod_web_auth_check_request(httpd_req_t *req)
+{
+    if (!mod_web_auth_is_enabled()) return false;
+    if (!req) return false;
+
+    // Get Authorization header
+    char auth_header[128];
+    size_t hdr_len = httpd_req_get_hdr_value_len(req, "Authorization");
+    if (hdr_len == 0 || hdr_len >= sizeof(auth_header)) return false;
+    httpd_req_get_hdr_value_str(req, "Authorization", auth_header, sizeof(auth_header));
+
+    return mod_web_auth_check_token_str_internal(auth_header);
+}
+
+bool mod_web_auth_check_token_str(const char *auth_header)
+{
+    if (!mod_web_auth_is_enabled()) return false;
+    return mod_web_auth_check_token_str_internal(auth_header);
 }
