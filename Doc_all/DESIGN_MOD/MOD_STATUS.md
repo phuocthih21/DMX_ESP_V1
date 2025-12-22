@@ -8,7 +8,7 @@ Module `MOD_STATUS` chiu trach nhiem phan hoi trang thai he thong bang thi giac 
 
 **Dependencies:** `driver/rmt`, `esp_timer`
 
-**Hardware:** 1x LED WS2812B (Neopixel) @ GPIO 28
+**Hardware:** 1x LED WS2812B (Neopixel) @ GPIO 48
 
 ---
 

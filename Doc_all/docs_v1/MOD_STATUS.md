@@ -63,11 +63,11 @@ void status_set_brightness(uint8_t percent);
 ## 9. Phu thuoc (Dependencies)
 
 - **Phu thuoc**: `driver/rmt`.
-- **Phan cung**: LED WS2812B @ GPIO 28.
+- **Phan cung**: LED WS2812B @ GPIO 48.
 
 ## 10. Cau hinh (Configuration)
 
-- `STATUS_LED_PIN`: 28.
+- `STATUS_LED_PIN`: 48.
 - `STATUS_RMT_CHANNEL`: 7.
 
 ## 11. Rang buoc ky thuat (Constraints)

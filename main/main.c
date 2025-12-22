@@ -1,69 +1,224 @@
 /*
- * @file status_test.c
- * @brief Simple test application to exercise the status LED module
- *
- * Enable by building with environment variable STATUS_TEST=1:
- *   STATUS_TEST=1 idf.py build
+ * @file main.c
+ * @brief System orchestrator (MAIN) - initializes all modules and handles boot modes
  */
 
 #include <stdio.h>
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "nvs_flash.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#include "startup.h"
+#include "sys_setup.h"
+#include "sys_mod.h"
 #include "status_led.h"
+#include "mod_net.h"
+/* net_wifi_start_ap is not declared in mod_net public header; forward declare */
+extern esp_err_t net_wifi_start_ap(const char* ssid, const char* pass);
+#include "mod_proto.h"
+#include "mod_dmx.h"
+#include "mod_web.h"
 
-static const char *TAG = "STATUS_TEST";
+static const char *TAG = "MAIN";
 
+/* Deferred DMX initialization to avoid blocking core 0 */
+static void dmx_deferred_init_task(void *arg)
+{
+    (void)arg;
+    const sys_config_t* cfg = sys_get_config();
+    const int max_attempts = 3;
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        ESP_LOGI(TAG, "DMX deferred init attempt %d/%d", attempt, max_attempts);
+        esp_err_t r = dmx_driver_init(cfg);
+        if (r == ESP_OK) {
+            ESP_LOGI(TAG, "DMX driver initialized (deferred)");
+            esp_err_t s = dmx_start();
+            if (s == ESP_OK) {
+                ESP_LOGI(TAG, "DMX transmission started (deferred)");
+            } else {
+                ESP_LOGW(TAG, "DMX start failed (deferred): %s", esp_err_to_name(s));
+            }
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGW(TAG, "DMX deferred init failed: %s (attempt %d)", esp_err_to_name(r), attempt);
+        vTaskDelay(pdMS_TO_TICKS(500 * attempt));
+    }
+    ESP_LOGW(TAG, "DMX deferred init failed after %d attempts; DMX disabled", max_attempts);
+    vTaskDelete(NULL);
+}
 
+/* --- NORMAL MODE --- */
+static void init_normal_mode(void)
+{
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "  ENTERING NORMAL MODE");
+    ESP_LOGI(TAG, "========================================");
+
+    // Network
+    esp_err_t ret = net_init(NULL);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Network initialization failed: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+        ESP_LOGE(TAG, "Critical error - restarting in 5 seconds...");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+        return;
+    }
+    ESP_LOGI(TAG, "Network initialized");
+
+    // Protocol stack (ArtNet/sACN)
+    ret = proto_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Protocol initialization failed: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+    } else {
+        ESP_LOGI(TAG, "Protocol stack initialized");
+    }
+
+    // Web server
+    ret = web_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Web server initialization failed: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+    } else {
+        ESP_LOGI(TAG, "Web server initialized");
+    }
+
+    // DMX deferred init on Core 1
+    BaseType_t _res = xTaskCreatePinnedToCore(dmx_deferred_init_task, "dmx_init_deferred", 4096, NULL, tskIDLE_PRIORITY + 2, NULL, 1);
+    if (_res != pdPASS) {
+        ESP_LOGW(TAG, "Failed to spawn DMX deferred init task; DMX will remain disabled");
+    } else {
+        ESP_LOGI(TAG, "DMX initialization deferred to background task");
+    }
+
+    // Initial LED state: No network until events update it
+    status_set_code(STATUS_NO_NET);
+
+    // Start stability timer (marks system stable after configured interval)
+    boot_protect_start_stable_timer();
+
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "  NORMAL MODE INITIALIZATION COMPLETE");
+    ESP_LOGI(TAG, "========================================");
+}
+
+/* --- RESCUE MODE --- */
+static void init_rescue_mode(void)
+{
+    ESP_LOGW(TAG, "========================================");
+    ESP_LOGW(TAG, "  ENTERING RESCUE MODE");
+    ESP_LOGW(TAG, "========================================");
+
+    // Start WiFi AP (use helper if available)
+    esp_err_t ret = net_wifi_start_ap("DMX-RESCUE", "");
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start rescue AP: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+        ESP_LOGE(TAG, "Critical error - restarting in 5 seconds...");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+        return;
+    }
+    ESP_LOGW(TAG, "WiFi AP started: SSID=DMX-RESCUE");
+
+    // Web server (limited)
+    ret = web_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Web server (rescue) init failed: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+    }
+
+    // Indicate rescue mode with LED
+    status_set_code(STATUS_NET_AP);
+
+    ESP_LOGW(TAG, "========================================");
+    ESP_LOGW(TAG, "  RESCUE MODE READY");
+    ESP_LOGW(TAG, "========================================");
+}
+
+/* --- app_main --- */
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Starting status LED test");
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "  DMX Node V4.0 - Firmware Boot");
+    ESP_LOGI(TAG, "  Build: %s %s", __DATE__, __TIME__);
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "");
 
-    esp_err_t r = status_init(48); /* GPIO 27 */
-    if (r != ESP_OK) {
-        ESP_LOGE(TAG, "status_init failed: %s", esp_err_to_name(r));
+    // Step 1: Pre-Boot Check
+    boot_mode_t mode = startup_decide_mode();
+    if (mode == BOOT_MODE_FACTORY_RESET) {
+        ESP_LOGI(TAG, "Factory reset requested; startup handles it and reboots");
         return;
     }
 
-    status_set_brightness(40);
+    // Step 2: Global Init
+    ESP_LOGI(TAG, "--- Global Initialization ---");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW(TAG, "NVS partition needs erase; erasing...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+    ESP_LOGI(TAG, "NVS flash initialized");
 
-    const status_code_t seq[] = {
-        STATUS_BOOTING,
-        STATUS_NET_ETH,
-        STATUS_NET_WIFI,
-        STATUS_NET_AP,
-        STATUS_NO_NET,
-        STATUS_DMX_WARN,
-        STATUS_OTA,
-        STATUS_ERROR,
-        STATUS_IDENTIFY,
-        STATUS_OFF
-    };
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_LOGI(TAG, "Network interface initialized");
 
-    for (;;) {
-        for (size_t i = 0; i < sizeof(seq)/sizeof(seq[0]); ++i) {
-            status_code_t c = seq[i];
-            if (c == STATUS_IDENTIFY) {
-                ESP_LOGI(TAG, "Trigger IDENTIFY for 2s");
-                status_trigger_identify(2000);
-            } else {
-                ESP_LOGI(TAG, "Set status %d", (int)c);
-                status_set_code(c);
-                /* Let status run for 3s (longer for OTA) */
-                if (c == STATUS_OTA) vTaskDelay(pdMS_TO_TICKS(5000));
-                else vTaskDelay(pdMS_TO_TICKS(3000));
-            }
-        }
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_LOGI(TAG, "Event loop initialized");
 
-        /* Ramp brightness test */
-        for (int b = 10; b <= 100; b += 10) {
-            status_set_brightness(b);
-            vTaskDelay(pdMS_TO_TICKS(300));
-        }
-        for (int b = 100; b >= 10; b -= 10) {
-            status_set_brightness(b);
-            vTaskDelay(pdMS_TO_TICKS(300));
-        }
+    // Step 3: System Core Init
+    ESP_LOGI(TAG, "--- System Core Initialization ---");
+    ret = sys_setup_all();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "System setup failed: %s", esp_err_to_name(ret));
+        status_set_code(STATUS_ERROR);
+        ESP_LOGE(TAG, "Critical error - restarting in 5 seconds...");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+        return;
+    }
+    ESP_LOGI(TAG, "System setup complete");
+
+    // Initialize status LED (GPIO 48)
+    ret = status_init(48);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Status LED init failed: %s", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "Status LED initialized (GPIO 48)");
+        status_set_code(STATUS_BOOTING);
+    }
+
+    // Step 4: Branch by mode
+    switch (mode) {
+        case BOOT_MODE_NORMAL:
+            init_normal_mode();
+            break;
+        case BOOT_MODE_RESCUE:
+            init_rescue_mode();
+            break;
+        case BOOT_MODE_FACTORY_RESET:
+        default:
+            ESP_LOGE(TAG, "Unrecognized boot mode: %d", mode);
+            status_set_code(STATUS_ERROR);
+            break;
+    }
+
+    // Main loop - lightweight housekeeping
+    ESP_LOGI(TAG, "Entering main loop...");
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(10000)); // 10s
+        ESP_LOGD(TAG, "Heap: free=%lu, min_free=%lu", esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
     }
 }
 
