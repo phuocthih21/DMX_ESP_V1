@@ -6,3 +6,4 @@ tools/mock_sys_mod/dist
 frontend/node_modules
 frontend/dist
 frontend/dist-ssr
+managed_components/
