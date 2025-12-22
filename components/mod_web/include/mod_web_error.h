@@ -41,6 +41,11 @@ esp_err_t mod_web_error_send_500(httpd_req_t *req, const char *message);
  */
 esp_err_t mod_web_error_send_401(httpd_req_t *req, const char *message);
 
+/**
+ * @brief Send 404 Not Found
+ */
+esp_err_t mod_web_error_send_404(httpd_req_t *req, const char *message);
+
 #ifdef __cplusplus
 }
 #endif

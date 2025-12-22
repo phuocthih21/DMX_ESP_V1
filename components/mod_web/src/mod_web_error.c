@@ -65,3 +65,19 @@ esp_err_t mod_web_error_send_401(httpd_req_t *req, const char *message)
     return ret;
 }
 
+esp_err_t mod_web_error_send_404(httpd_req_t *req, const char *message)
+{
+    ESP_LOGW(TAG, "404 Not Found: %s", message);
+    httpd_resp_set_status(req, "404 Not Found");
+    httpd_resp_set_type(req, "application/json");
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "error");
+    cJSON_AddStringToObject(root, "error", message ? message : "Not Found");
+
+    esp_err_t ret = mod_web_json_send_response(req, root);
+    cJSON_Delete(root);
+
+    return ret;
+}
+

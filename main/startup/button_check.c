@@ -13,7 +13,7 @@
 #include "esp_log.h"
 
 // Import status codes for visual feedback
-#include "mod_status.h"
+#include "status_led.h"
 
 static const char* TAG = "BOOT_BTN";
 

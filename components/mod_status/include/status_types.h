@@ -1,8 +1,6 @@
-/**
+/*
  * @file status_types.h
- * @brief Type definitions for status indicator module
- * 
- * Defines status codes, RGB colors, and pattern types for the WS2812B LED
+ * @brief Type definitions for status LED module
  */
 
 #pragma once
@@ -10,44 +8,35 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/**
- * @brief System status codes
- * 
- * Each code represents a specific system state with associated
- * color and blink pattern
- */
+/** Status codes */
 typedef enum {
-    STATUS_BOOTING = 0,      ///< System booting - White breathing
-    STATUS_NET_ETH,          ///< Ethernet connected - Green solid
-    STATUS_NET_WIFI,         ///< WiFi connected - Cyan solid
-    STATUS_NET_AP,           ///< WiFi AP mode (Rescue) - Blue double blink
-    STATUS_NO_NET,           ///< No network - Yellow slow blink
-    STATUS_DMX_WARN,         ///< DMX failsafe active - Orange fast blink
-    STATUS_OTA,              ///< OTA update in progress - Purple strobe (HIGHEST PRIORITY)
-    STATUS_ERROR,            ///< System error - Red slow blink
-    STATUS_IDENTIFY,         ///< Device identify mode - White strobe
-    STATUS_OFF,              ///< LED off
-    STATUS_MAX               ///< Sentinel value
+    STATUS_BOOTING = 0,
+    STATUS_NET_ETH,
+    STATUS_NET_WIFI,
+    STATUS_NET_AP,
+    STATUS_NO_NET,
+    STATUS_DMX_WARN,
+    STATUS_OTA,
+    STATUS_ERROR,
+    STATUS_IDENTIFY,
+    STATUS_OFF,
+    STATUS_MAX
 } status_code_t;
 
-/**
- * @brief RGB color definition
- */
+/** RGB color */
 typedef struct {
-    uint8_t r;  ///< Red component (0-255)
-    uint8_t g;  ///< Green component (0-255)
-    uint8_t b;  ///< Blue component (0-255)
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
 } rgb_color_t;
 
-/**
- * @brief LED pattern types
- */
+/** Pattern types */
 typedef enum {
-    PATTERN_SOLID = 0,       ///< Solid color (no blinking)
-    PATTERN_BREATHING,       ///< Smooth breathing effect (sine wave)
-    PATTERN_BLINK_SLOW,      ///< Slow blink at 1Hz
-    PATTERN_BLINK_FAST,      ///< Fast blink at 4Hz
-    PATTERN_DOUBLE_BLINK,    ///< Double blink pattern (2 flashes + pause)
-    PATTERN_STROBE,          ///< Rapid strobe at 10Hz
-    PATTERN_MAX              ///< Sentinel value
+    PATTERN_SOLID = 0,
+    PATTERN_BREATHING,
+    PATTERN_BLINK_SLOW,
+    PATTERN_BLINK_FAST,
+    PATTERN_DOUBLE_BLINK,
+    PATTERN_STROBE,
+    PATTERN_MAX
 } status_pattern_t;

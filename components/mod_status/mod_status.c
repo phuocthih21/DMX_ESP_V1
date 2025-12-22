@@ -5,21 +5,18 @@
  * Manages LED state machine, transitions, and FreeRTOS task
  */
 
-#include "mod_status.h"
-#include "status_types.h"
-#include "esp_log.h"
-#include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <math.h>
-#include <string.h>
+/* Deprecated file retained for compatibility. Use status_led.h/status_led.c instead. */
+
+#include "status_led.h"
+
+/* No implementation here; wrapper kept for legacy builds */
 
 static const char* TAG = "MOD_STATUS";
 
-/* External functions from led_driver.c */
-extern esp_err_t led_driver_init(int gpio_pin);
-extern esp_err_t led_driver_set_color(rgb_color_t color);
-extern esp_err_t led_driver_deinit(void);
+#include "led_strip.h"
+
+/* LED strip instance (IDF led_strip) */
+static led_strip_t *s_led_strip = NULL;
 
 /* External data from led_patterns.c */
 extern const rgb_color_t STATUS_COLORS[];
@@ -69,20 +66,19 @@ static rgb_color_t calculate_pattern_color(status_code_t code, int64_t elapsed_u
  * @brief Initialize status LED module
  */
 esp_err_t status_init(int gpio_pin) {
-    esp_err_t ret;
-    
     ESP_LOGI(TAG, "Initializing status LED module on GPIO %d", gpio_pin);
-    
-    // Initialize LED driver
-    ret = led_driver_init(gpio_pin);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "LED driver init failed: %d", ret);
-        return ret;
+
+    // Initialize IDF led_strip for single pixel WS2812B
+    led_strip_config_t cfg = LED_STRIP_DEFAULT_CONFIG(1, RMT_CHANNEL_7, gpio_pin);
+    s_led_strip = led_strip_new_rmt_ws2812(&cfg);
+    if (!s_led_strip) {
+        ESP_LOGE(TAG, "Failed to initialize IDF led_strip on GPIO %d", gpio_pin);
+        return ESP_FAIL;
     }
-    
+
     // Initialize state
     g_state.pattern_start_time = esp_timer_get_time();
-    
+
     // Create LED task on Core 0 with low priority
     BaseType_t task_ret = xTaskCreatePinnedToCore(
         status_task_loop,
@@ -93,16 +89,16 @@ esp_err_t status_init(int gpio_pin) {
         &g_state.task_handle,
         0                        // Core 0 (DMX uses Core 1)
     );
-    
+
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create status task");
-        led_driver_deinit();
+        if (s_led_strip) { led_strip_delete(s_led_strip); s_led_strip = NULL; }
         return ESP_FAIL;
     }
-    
+
     g_state.initialized = true;
-    
-    ESP_LOGI(TAG, "Status LED module initialized");
+
+    ESP_LOGI(TAG, "Status LED module initialized (led_strip)");
     return ESP_OK;
 }
 
@@ -226,9 +222,16 @@ static void status_task_loop(void* arg) {
             final_color.b = (uint8_t)(final_color.b * fade_alpha);
         }
         
-        // Step 7: Send color to LED
-        led_driver_set_color(final_color);
-        
+        // Step 7: Send color to LED using IDF led_strip
+        if (s_led_strip) {
+            esp_err_t r = led_strip_set_pixel(s_led_strip, 0, final_color.r, final_color.g, final_color.b);
+            if (r == ESP_OK) {
+                led_strip_refresh(s_led_strip);
+            } else {
+                ESP_LOGW(TAG, "led_strip_set_pixel failed: %s", esp_err_to_name(r));
+            }
+        }
+
         // Step 8: Delay for 50Hz update rate (20ms)
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -255,6 +258,22 @@ static void process_transition(uint32_t delta_ms) {
         
         ESP_LOGD(TAG, "Transition complete, now at status %d", g_state.current_code);
     }
+}
+
+/**
+ * @brief Deinitialize status module and free resources
+ */
+void status_deinit(void)
+{
+    if (g_state.task_handle) {
+        vTaskDelete(g_state.task_handle);
+        g_state.task_handle = NULL;
+    }
+    if (s_led_strip) {
+        led_strip_delete(s_led_strip);
+        s_led_strip = NULL;
+    }
+    g_state.initialized = false;
 }
 
 /**

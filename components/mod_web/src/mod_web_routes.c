@@ -184,6 +184,19 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         return ret;
     }
 
+    // GET /api/net/failure - return last recorded network failure (if any)
+    httpd_uri_t uri_net_fail = {
+        .uri = "/api/net/failure",
+        .method = HTTP_GET,
+        .handler = mod_web_api_network_failure,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_net_fail);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/net/failure handler");
+        return ret;
+    }
+
     // ========== WebSocket Handler ==========
     
     // GET /ws/status -> WebSocket upgrade

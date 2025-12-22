@@ -415,6 +415,8 @@ esp_err_t mod_web_api_network_status(httpd_req_t *req)
         return mod_web_error_send_500(req, "Failed to get system config");
     }
 
+    // Build the existing response first (ip, wifi_ssid, flags)
+
     // Build JSON response
     // Per MOD_WEB.md: JSON Models mapping to sys_config_t
     cJSON *root = cJSON_CreateObject();
@@ -441,6 +443,26 @@ esp_err_t mod_web_api_network_status(httpd_req_t *req)
     cJSON_Delete(root);
 
     return ret;
+}
+
+esp_err_t mod_web_api_network_failure(httpd_req_t *req)
+{
+    ESP_LOGD(TAG, "GET /api/net/failure");
+
+    char buf[256];
+    esp_err_t r = net_get_last_failure(buf, sizeof(buf));
+    if (r == ESP_OK) {
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "last_failure", buf);
+        esp_err_t rr = mod_web_json_send_response(req, root);
+        cJSON_Delete(root);
+        return rr;
+    } else if (r == ESP_ERR_NOT_FOUND) {
+        return mod_web_error_send_404(req, "no_failure_recorded");
+    } else {
+        ESP_LOGW(TAG, "Failed to read last network failure: %s", esp_err_to_name(r));
+        return mod_web_error_send_500(req, "failed_to_read_failure");
+    }
 }
 
 esp_err_t mod_web_api_network_config(httpd_req_t *req)

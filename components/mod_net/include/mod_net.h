@@ -34,6 +34,27 @@ void net_get_status(net_status_t* status);
  */
 void net_reload_config(void);
 
+/**
+ * @brief Read last recorded network failure (JSON string) from NVS
+ *
+ * @param buf Buffer to receive the string (null terminated)
+ * @param buf_len Length of buffer
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if no record, or other NVS error
+ */
+esp_err_t net_get_last_failure(char* buf, size_t buf_len);
+
+/**
+ * @brief Record a short "last action" string to NVS for post-mortem debugging
+ *
+ * Key is short (<=15 chars). Examples: "eth_start", "wifi_start", "eth_drv_try1"
+ */
+esp_err_t net_write_last_action(const char *action);
+
+/**
+ * @brief Read last action string from NVS
+ */
+esp_err_t net_get_last_action(char *buf, size_t buf_len);
+
 #ifdef __cplusplus
 }
 #endif

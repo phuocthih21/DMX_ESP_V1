@@ -2,4 +2,5 @@
 dependencies:
   espressif/mdns: "^1.2.0"
   espressif/cJSON: "^1.7.0"
+  espressif/led_strip: "^3.0.0"
 

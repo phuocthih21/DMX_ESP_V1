@@ -6,6 +6,7 @@
 #include "esp_eth.h"
 #include "sys_mod.h"
 #include "esp_wifi.h"
+#include "nvs.h"
 #include "lwip/ip4_addr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -151,21 +152,69 @@ esp_err_t net_init(const net_config_t* cfg) {
     // Initialize TCP/IP stack
     esp_err_t err = esp_netif_init();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_netif_init failed: %d", err);
+        ESP_LOGE(TAG, "esp_netif_init failed: %s (%d)", esp_err_to_name(err), err);
         return err;
+    }
+
+    // If there's a recorded network failure from previous boot, surface it in the logs
+    char _last_failure[256];
+    esp_err_t _lf = net_get_last_failure(_last_failure, sizeof(_last_failure));
+    if (_lf == ESP_OK) {
+        ESP_LOGW(TAG, "Previous network failure recorded: %s", _last_failure);
+    } else if (_lf != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "Failed to read last network failure: %s", esp_err_to_name(_lf));
+    } else {
+        ESP_LOGD(TAG, "No previous network failure recorded");
+    }
+
+    // Also surface the last recorded "action" to help post-mortem diagnosis
+    char _last_act[64];
+    esp_err_t _la = net_get_last_action(_last_act, sizeof(_last_act));
+    if (_la == ESP_OK) {
+        ESP_LOGW(TAG, "Last network action before crash/stop: %s", _last_act);
+    } else if (_la != ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "Failed to read last network action: %s", esp_err_to_name(_la));
+    } else {
+        ESP_LOGD(TAG, "No previous network action recorded");
     }
 
     // Register event handlers
 #if defined(CONFIG_ETH_SPI_ETHERNET_W5500) && defined(ETH_EVENT)
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &net_eth_event_handler, NULL));
+    {
+        esp_err_t _er = esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &net_eth_event_handler, NULL);
+        if (_er != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to register ETH_EVENT handler: %s", esp_err_to_name(_er));
+        }
+    }
 #endif
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &net_ip_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &net_wifi_event_handler, NULL));
+    {
+        esp_err_t _er = esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &net_ip_event_handler, NULL);
+        if (_er != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to register IP_EVENT handler: %s", esp_err_to_name(_er));
+        }
+    }
+    {
+        esp_err_t _er = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &net_wifi_event_handler, NULL);
+        if (_er != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to register WIFI_EVENT handler: %s", esp_err_to_name(_er));
+        }
+    }
 
     // Try to start Ethernet first
+    net_write_last_action("eth_start");
     err = net_eth_start();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Ethernet start failed (%d), trying WiFi STA", err);
+        ESP_LOGW(TAG, "Ethernet start failed (%s), trying WiFi STA", esp_err_to_name(err));
+        sys_send_event(SYS_EVT_ERROR, NULL, 0);
+        net_write_last_action("wifi_start");
+        net_wifi_start_sta(net_cfg->wifi_ssid, net_cfg->wifi_pass);
+    }
+
+    // Wait briefly for link detection; if no link -> start WiFi
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    if (!g_net_status.eth_connected) {
+        ESP_LOGW(TAG, "No Ethernet link detected, starting WiFi STA");
+        sys_send_event(SYS_EVT_ERROR, NULL, 0);
         net_wifi_start_sta(net_cfg->wifi_ssid, net_cfg->wifi_pass);
     }
 
@@ -188,6 +237,67 @@ void net_get_status(net_status_t* status) {
     }
 }
 
+esp_err_t net_get_last_failure(char* buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t nvs;
+    esp_err_t ret = nvs_open("err_log", NVS_READONLY, &nvs);
+    if (ret != ESP_OK) return ret;
+
+    size_t required = buf_len;
+    /* Use same short key as write routine */
+    ret = nvs_get_blob(nvs, "net_fail", buf, &required);
+    if (ret == ESP_ERR_NVS_NOT_FOUND) {
+        /* Try very short fallback key if older fallback was used */
+        required = buf_len;
+        ret = nvs_get_blob(nvs, "nf", buf, &required);
+    }
+    nvs_close(nvs);
+
+    if (ret == ESP_OK) return ESP_OK;
+    if (ret == ESP_ERR_NVS_NOT_FOUND) return ESP_ERR_NOT_FOUND;
+    return ret;
+}
+
+esp_err_t net_write_last_action(const char *action)
+{
+    if (!action) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t nvs;
+    esp_err_t r = nvs_open("err_log", NVS_READWRITE, &nvs);
+    if (r != ESP_OK) return r;
+
+    /* Keep key very short to avoid NVS key length errors */
+    const char *key = "net_act"; // <= 7 chars
+    r = nvs_set_str(nvs, key, action);
+    if (r == ESP_OK) {
+        r = nvs_commit(nvs);
+        if (r == ESP_OK) ESP_LOGD(TAG, "Recorded last action: %s", action);
+        else ESP_LOGW(TAG, "Failed to commit last action: %s", esp_err_to_name(r));
+    } else {
+        ESP_LOGW(TAG, "Failed to write last action: %s", esp_err_to_name(r));
+    }
+
+    nvs_close(nvs);
+    return r;
+}
+
+esp_err_t net_get_last_action(char *buf, size_t buf_len)
+{
+    if (!buf || buf_len == 0) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t nvs;
+    esp_err_t r = nvs_open("err_log", NVS_READONLY, &nvs);
+    if (r != ESP_OK) return r;
+
+    size_t required = buf_len;
+    r = nvs_get_str(nvs, "net_act", buf, &required);
+    nvs_close(nvs);
+
+    if (r == ESP_OK) return ESP_OK;
+    if (r == ESP_ERR_NVS_NOT_FOUND) return ESP_ERR_NOT_FOUND;
+    return r;
+}
+
 void net_reload_config(void) {
     ESP_LOGI(TAG, "Reloading network config and applying changes");
     // For now, just restart interfaces according to new config
@@ -197,6 +307,7 @@ void net_reload_config(void) {
 
     // Try to reconnect WiFi with new settings
     if (cfg->net.wifi_ssid[0]) {
+        net_write_last_action("wifi_reload");
         net_wifi_start_sta(cfg->net.wifi_ssid, cfg->net.wifi_pass);
     }
 }

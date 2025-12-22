@@ -77,6 +77,13 @@ esp_err_t mod_web_api_dmx_config(httpd_req_t *req);
 esp_err_t mod_web_api_network_status(httpd_req_t *req);
 
 /**
+ * @brief GET /api/network/failure
+ *
+ * Returns a small JSON string describing the last recorded network failure
+ */
+esp_err_t mod_web_api_network_failure(httpd_req_t *req);
+
+/**
  * @brief POST /api/network/config
  * 
  * Updates network configuration.
