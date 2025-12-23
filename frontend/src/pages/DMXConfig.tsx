@@ -24,8 +24,11 @@ export const DMXConfigPage: React.FC = () => {
     onPoll: async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get<DMXPortStatus[]>(API_ENDPOINTS.DMX_STATUS);
-        setPorts(response.data);
+        const response = await apiClient.get(API_ENDPOINTS.DMX_STATUS);
+        const portsData = Array.isArray(response.data)
+          ? response.data
+          : (response.data && Array.isArray(response.data.ports) ? response.data.ports : []);
+        setPorts(portsData as DMXPortStatus[]);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to fetch DMX status';
         setError(message);
@@ -60,8 +63,11 @@ export const DMXConfigPage: React.FC = () => {
         'error'
       );
       // Reload status on error
-      const response = await apiClient.get<DMXPortStatus[]>(API_ENDPOINTS.DMX_STATUS);
-      setPorts(response.data);
+      const response = await apiClient.get(API_ENDPOINTS.DMX_STATUS);
+      const portsData = Array.isArray(response.data)
+        ? response.data
+        : (response.data && Array.isArray(response.data.ports) ? response.data.ports : []);
+      setPorts(portsData as DMXPortStatus[]);
     } finally {
       setSavingPort(null);
     }

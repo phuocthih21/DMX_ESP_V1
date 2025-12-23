@@ -1,5 +1,4 @@
 build/
-sdkconfig
 sdkconfig.old
 tools/mock_sys_mod/node_modules
 tools/mock_sys_mod/dist

@@ -17,6 +17,7 @@
 #include "esp_http_server.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "cJSON.h"
 #include <string.h>
 
@@ -53,6 +54,9 @@ esp_err_t mod_web_api_system_info(httpd_req_t *req)
     cJSON_AddStringToObject(root, "version", "4.0.0");
     cJSON_AddNumberToObject(root, "uptime", uptime_sec);
     cJSON_AddNumberToObject(root, "free_heap", free_heap);
+    const sys_state_t *state = sys_get_state();
+    uint8_t cpu = state ? state->cpu_load : 0;
+    cJSON_AddNumberToObject(root, "cpu", cpu);
     cJSON_AddBoolToObject(root, "eth_up", net_status.eth_connected);
     cJSON_AddBoolToObject(root, "wifi_up", net_status.wifi_connected);
     
@@ -443,6 +447,94 @@ esp_err_t mod_web_api_network_status(httpd_req_t *req)
     cJSON_Delete(root);
 
     return ret;
+}
+
+/* Wi-Fi scan handler: performs a synchronous Wi-Fi scan and returns an array of networks */
+esp_err_t mod_web_api_network_scan(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "GET /api/network/status/scan");
+
+    // Ensure WiFi driver is up
+    wifi_mode_t mode;
+    esp_err_t e = esp_wifi_get_mode(&mode);
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_get_mode failed: %s", esp_err_to_name(e));
+        return mod_web_error_send_500(req, "wifi_not_ready");
+    }
+
+    // Start blocking scan
+    wifi_scan_config_t scan_conf = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = true
+    };
+
+    e = esp_wifi_scan_start(&scan_conf, true); // block until done
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_scan_start failed: %s", esp_err_to_name(e));
+        return mod_web_error_send_500(req, "scan_start_failed");
+    }
+
+    uint16_t ap_num = 0;
+    e = esp_wifi_scan_get_ap_num(&ap_num);
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "esp_wifi_scan_get_ap_num failed: %s", esp_err_to_name(e));
+        return mod_web_error_send_500(req, "scan_get_num_failed");
+    }
+
+    // Limit number of returned entries to reasonable value to avoid large allocations
+    const uint16_t MAX_RESULTS = 64;
+    if (ap_num > MAX_RESULTS) ap_num = MAX_RESULTS;
+
+    wifi_ap_record_t *ap_records = NULL;
+    if (ap_num > 0) {
+        ap_records = (wifi_ap_record_t *)calloc(ap_num, sizeof(wifi_ap_record_t));
+        if (!ap_records) return mod_web_error_send_500(req, "no_memory");
+
+        e = esp_wifi_scan_get_ap_records(&ap_num, ap_records);
+        if (e != ESP_OK) {
+            free(ap_records);
+            ESP_LOGW(TAG, "esp_wifi_scan_get_ap_records failed: %s", esp_err_to_name(e));
+            return mod_web_error_send_500(req, "scan_get_records_failed");
+        }
+    }
+
+    cJSON *arr = cJSON_CreateArray();
+
+    for (uint16_t i = 0; i < ap_num; i++) {
+        wifi_ap_record_t *r = &ap_records[i];
+        cJSON *obj = cJSON_CreateObject();
+        cJSON_AddStringToObject(obj, "ssid", (const char *)r->ssid);
+        cJSON_AddNumberToObject(obj, "rssi", r->rssi);
+        cJSON_AddNumberToObject(obj, "auth_mode", (int)r->authmode);
+        cJSON_AddNumberToObject(obj, "channel", r->primary);
+        // bssid as hex string
+        char bssid_hex[18];
+        sprintf(bssid_hex, "%02x:%02x:%02x:%02x:%02x:%02x",
+                r->bssid[0], r->bssid[1], r->bssid[2], r->bssid[3], r->bssid[4], r->bssid[5]);
+        cJSON_AddStringToObject(obj, "bssid", bssid_hex);
+        cJSON_AddBoolToObject(obj, "hidden", strlen((const char *)r->ssid) == 0);
+        cJSON_AddItemToArray(arr, obj);
+    }
+
+    if (ap_records) free(ap_records);
+
+    esp_err_t ret = mod_web_json_send_response(req, arr);
+    cJSON_Delete(arr);
+    return ret;
+}
+
+/* Generic OPTIONS handler for CORS preflight */
+esp_err_t mod_web_api_options(httpd_req_t *req)
+{
+    ESP_LOGD(TAG, "OPTIONS %s", req->uri);
+
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    return httpd_resp_send(req, NULL, 0);
 }
 
 esp_err_t mod_web_api_network_failure(httpd_req_t *req)

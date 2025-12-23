@@ -26,17 +26,31 @@ const initialState = {
 
 export const useDMXStore = create<DMXState>((set) => ({
   ...initialState,
-  setPorts: (ports) => set({ 
-    ports, 
-    lastUpdate: Date.now(),
-    error: null 
+  setPorts: (ports) => {
+    // Coerce input to an array to be defensive against backend/WS variations
+    const normalized = Array.isArray(ports)
+      ? ports
+      : (ports && Array.isArray((ports as any).ports) ? (ports as any).ports : []);
+    return set({
+      ports: normalized as DMXPortStatus[],
+      lastUpdate: Date.now(),
+      error: null,
+    });
+  },
+  updatePort: (port, status) => set((state) => {
+    const portsArray = Array.isArray(state.ports) ? state.ports.slice() : [];
+    const idx = portsArray.findIndex((p) => p.port === port);
+    if (idx >= 0) {
+      portsArray[idx] = { ...portsArray[idx], ...status };
+    } else {
+      // Insert a new port entry if missing
+      portsArray.push({ port, universe: 0, enabled: false, ...(status as any) } as DMXPortStatus);
+    }
+    return {
+      ports: portsArray,
+      lastUpdate: Date.now(),
+    };
   }),
-  updatePort: (port, status) => set((state) => ({
-    ports: state.ports.map((p) => 
-      p.port === port ? { ...p, ...status } : p
-    ),
-    lastUpdate: Date.now(),
-  })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () => set(initialState),

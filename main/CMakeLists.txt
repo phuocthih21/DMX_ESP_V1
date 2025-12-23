@@ -4,5 +4,5 @@ idf_component_register(
          "startup/button_check.c"
          "startup/startup.c"
     INCLUDE_DIRS "." "startup/include"
-    REQUIRES sys_mod mod_status mod_dmx mod_net mod_proto mod_web nvs_flash driver esp_timer
+    REQUIRES sys_mod mod_status mod_dmx mod_net mod_proto mod_web nvs_flash driver esp_timer app_update esp_app_format
 )

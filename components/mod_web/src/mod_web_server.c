@@ -42,8 +42,9 @@ static httpd_config_t get_server_config(void)
     // Set core affinity (Core 0 for web tasks, Low Priority per ARCHITECTURE.md)
     config.core_id = 0;
     
-    // Increase URI handlers limit
-    config.max_uri_handlers = 16;
+    // Increase URI handlers limit (raise to accommodate legacy aliases and websocket handlers)
+    // Default 16 can be insufficient; raise to 32 to avoid ESP_ERR_HTTPD_HANDLERS_FULL
+    config.max_uri_handlers = 32;
     
     return config;
 }

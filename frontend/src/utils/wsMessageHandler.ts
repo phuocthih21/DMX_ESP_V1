@@ -27,9 +27,15 @@ export function handleWSMessage(message: WSMessage | any): void {
       });
     }
     
-    // Update DMX ports
+    // Update DMX ports (support both array and { ports: [...] } shapes)
+    let portsArr: any[] = [];
     if (Array.isArray(payload.dmx)) {
-      useDMXStore.getState().setPorts(payload.dmx);
+      portsArr = payload.dmx;
+    } else if (payload.dmx && Array.isArray(payload.dmx.ports)) {
+      portsArr = payload.dmx.ports;
+    }
+    if (portsArr.length > 0) {
+      useDMXStore.getState().setPorts(portsArr);
     }
     
     // Update network status

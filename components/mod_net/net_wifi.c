@@ -135,11 +135,19 @@ esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
         wifi_config.ap.ssid[sizeof(wifi_config.ap.ssid)-1] = '\0';
         wifi_config.ap.ssid_len = strnlen((const char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
     }
-    if (use_pass) {
-        strncpy((char*)wifi_config.ap.password, use_pass, sizeof(wifi_config.ap.password)-1);
-        wifi_config.ap.password[sizeof(wifi_config.ap.password)-1] = '\0';
-        wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
-        ESP_LOGD(TAG, "AP using WPA PSK (password length=%d)", (int)strlen((const char*)wifi_config.ap.password));
+    if (use_pass && use_pass[0]) {
+        size_t pass_len = strnlen(use_pass, sizeof(wifi_config.ap.password));
+        if (pass_len >= 8) {
+            strncpy((char*)wifi_config.ap.password, use_pass, sizeof(wifi_config.ap.password)-1);
+            wifi_config.ap.password[sizeof(wifi_config.ap.password)-1] = '\0';
+            wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+            ESP_LOGD(TAG, "AP using WPA PSK (password length=%d)", (int)pass_len);
+        } else {
+            ESP_LOGW(TAG, "AP password too short (%d chars); starting OPEN AP instead", (int)pass_len);
+            /* Ensure password buffer is empty for open AP */
+            wifi_config.ap.password[0] = '\0';
+            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        }
     } else {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }

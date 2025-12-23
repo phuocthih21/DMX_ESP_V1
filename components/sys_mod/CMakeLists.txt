@@ -8,6 +8,7 @@ idf_component_register(
         "sys_snapshot.c"
         "sys_setup.c"
         "sys_mod_api.c"
+        "sys_cpu.c"
     INCLUDE_DIRS 
         "include"
     REQUIRES 

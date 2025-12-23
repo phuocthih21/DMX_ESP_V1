@@ -17,8 +17,10 @@ esp_err_t mod_web_json_send_response(httpd_req_t *req, cJSON *json)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Set content type
+    // Set content type and CORS headers
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     // Serialize JSON
     char *json_str = cJSON_PrintUnformatted(json);

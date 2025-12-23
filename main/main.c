@@ -18,8 +18,10 @@
 #include "sys_mod.h"
 #include "status_led.h"
 #include "mod_net.h"
+
 /* net_wifi_start_ap is not declared in mod_net public header; forward declare */
 extern esp_err_t net_wifi_start_ap(const char* ssid, const char* pass);
+
 #include "mod_proto.h"
 #include "mod_dmx.h"
 #include "mod_web.h"
@@ -117,7 +119,7 @@ static void init_rescue_mode(void)
     ESP_LOGW(TAG, "========================================");
 
     // Start WiFi AP (use helper if available)
-    esp_err_t ret = net_wifi_start_ap("DMX-RESCUE", "");
+    esp_err_t ret = net_wifi_start_ap("DMX-RESCUE", "12345678");
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start rescue AP: %s", esp_err_to_name(ret));
         status_set_code(STATUS_ERROR);
@@ -153,7 +155,9 @@ void app_main(void)
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "");
 
-    // Initialize NVS Flash earliest to ensure other subsystems (crash monitor, sys_setup) can access NVS
+    /* * 1. Initialize NVS Flash first 
+     * Critical for config, crash monitor, and system stability
+     */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGW(TAG, "NVS partition needs erase; erasing...");
@@ -163,25 +167,44 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     ESP_LOGI(TAG, "NVS flash initialized");
 
-    // Step 1: Pre-Boot Check
+    /* * 2. Initialize Status LED IMMEDIATELY 
+     * Moved up to ensure we can report errors during System Setup or Boot Checks 
+     */
+    ret = status_init(48); // GPIO 48
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "FATAL: Status LED init failed: %s", esp_err_to_name(ret));
+        // Continue anyway, but logging is the only output mechanism now
+    } else {
+        ESP_LOGI(TAG, "Status LED initialized (GPIO 48)");
+        status_set_code(STATUS_BOOTING);
+    }
+
+    /* * 3. Pre-Boot Check & Decision 
+     */
     boot_mode_t mode = startup_decide_mode();
     if (mode == BOOT_MODE_FACTORY_RESET) {
         ESP_LOGI(TAG, "Factory reset requested; startup handles it and reboots");
+        status_set_code(STATUS_ERROR); // Blink error/reset pattern
+        vTaskDelay(pdMS_TO_TICKS(500)); // Allow LED to be seen briefly
         return;
     }
 
+    /* * 4. Essential System Services 
+     */
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_LOGI(TAG, "Network interface initialized");
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_LOGI(TAG, "Event loop initialized");
 
-    // Step 3: System Core Init
+    /* * 5. System Core Initialization (Config, Buffers, etc.) 
+     */
     ESP_LOGI(TAG, "--- System Core Initialization ---");
     ret = sys_setup_all();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "System setup failed: %s", esp_err_to_name(ret));
-        status_set_code(STATUS_ERROR);
+        // Now this call will actually work because LED is initialized!
+        status_set_code(STATUS_ERROR); 
         ESP_LOGE(TAG, "Critical error - restarting in 5 seconds...");
         vTaskDelay(pdMS_TO_TICKS(5000));
         esp_restart();
@@ -189,16 +212,8 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "System setup complete");
 
-    // Initialize status LED (GPIO 48)
-    ret = status_init(48);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Status LED init failed: %s", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Status LED initialized (GPIO 48)");
-        status_set_code(STATUS_BOOTING);
-    }
-
-    // Step 4: Branch by mode
+    /* * 6. Branch by Boot Mode 
+     */
     switch (mode) {
         case BOOT_MODE_NORMAL:
             init_normal_mode();
@@ -213,11 +228,11 @@ void app_main(void)
             break;
     }
 
-    // Main loop - lightweight housekeeping
+    /* * 7. Main loop - lightweight housekeeping 
+     */
     ESP_LOGI(TAG, "Entering main loop...");
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(10000)); // 10s
         ESP_LOGD(TAG, "Heap: free=%lu, min_free=%lu", esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
     }
 }
-

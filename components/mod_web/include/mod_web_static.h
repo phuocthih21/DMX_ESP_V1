@@ -29,6 +29,11 @@ esp_err_t mod_web_static_handler_js(httpd_req_t *req);
  */
 esp_err_t mod_web_static_handler_css(httpd_req_t *req);
 
+/**
+ * @brief GET /favicon.ico -> small favicon or empty response
+ */
+esp_err_t mod_web_static_handler_favicon(httpd_req_t *req);
+
 #ifdef __cplusplus
 }
 #endif

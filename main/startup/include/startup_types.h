@@ -38,6 +38,7 @@ typedef enum {
 typedef struct {
     uint8_t crash_counter;     /**< Number of consecutive crashes */
     uint32_t last_boot_time;   /**< Last boot timestamp (epoch seconds) */
+    uint8_t image_sha[32];     /**< SHA256 of the running app image */
     uint32_t magic;            /**< Validation magic number */
 } boot_protect_data_t;
 

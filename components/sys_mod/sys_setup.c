@@ -120,6 +120,10 @@ esp_err_t sys_mod_init(void) {
     state->ota_in_progress = false;
     state->ota_partition = NULL;
     state->ota_handle = 0;
+
+    // Start CPU sampling
+    extern void sys_cpu_init(void);
+    sys_cpu_init();
     
     // Print final status
     const sys_config_t* cfg = sys_get_config();

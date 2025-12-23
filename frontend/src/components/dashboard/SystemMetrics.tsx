@@ -41,7 +41,7 @@ export const SystemMetrics: React.FC = () => {
           <div>
             <p className="text-sm text-gray-500">CPU Load</p>
             <p className="text-2xl font-semibold text-gray-900">
-              {formatPercent(info.cpu_load)}
+              {info.uptime !== undefined && info.uptime < 3 ? 'Calibrating…' : formatPercent(info.cpu_load)}
             </p>
           </div>
         )}

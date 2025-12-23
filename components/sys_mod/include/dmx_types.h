@@ -174,7 +174,8 @@ typedef struct {
     uint8_t* dmx_buffers[SYS_MAX_PORTS]; // Pointers to DMX buffers
     int64_t last_activity[SYS_MAX_PORTS]; // Last packet timestamp (watchdog)
     
-    uint8_t reserved[16];               // Future expansion
+    uint8_t cpu_load;                    // CPU load percentage 0-100
+    uint8_t reserved[15];               // Future expansion (adjusted for cpu_load size)
 } sys_state_t;
 
 /* ========== SNAPSHOT DATA ========== */

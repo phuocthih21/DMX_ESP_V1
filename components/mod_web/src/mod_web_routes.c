@@ -59,7 +59,18 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         ESP_LOGE(TAG, "Failed to register /style.css handler");
         return ret;
     }
-
+    // GET /favicon.ico -> small icon or empty response
+    httpd_uri_t uri_favicon = {
+        .uri = "/favicon.ico",
+        .method = HTTP_GET,
+        .handler = mod_web_static_handler_favicon,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_favicon);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /favicon.ico handler");
+        return ret;
+    }
     // ========== System API Handlers ==========
     // Per MOD_WEB.md: GET /api/sys/info, POST /api/dmx/config, POST /api/net/config
     
@@ -143,6 +154,19 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         return ret;
     }
 
+    // OPTIONS /api/dmx/config (CORS preflight)
+    httpd_uri_t uri_dmx_config_opt = {
+        .uri = "/api/dmx/config",
+        .method = HTTP_OPTIONS,
+        .handler = mod_web_api_options,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_dmx_config_opt);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register OPTIONS /api/dmx/config handler");
+        return ret;
+    }
+
     // GET /api/dmx/status (additional endpoint for status)
     httpd_uri_t uri_dmx_status = {
         .uri = "/api/dmx/status",
@@ -171,6 +195,44 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         return ret;
     }
 
+    // Also register legacy '/api/network/config' for backward compatibility
+    httpd_uri_t uri_network_config = {
+        .uri = "/api/network/config",
+        .method = HTTP_POST,
+        .handler = mod_web_api_network_config,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_network_config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/network/config handler");
+        return ret;
+    }
+
+    // OPTIONS /api/network/config (CORS preflight)
+    httpd_uri_t uri_network_config_opt = {
+        .uri = "/api/network/config",
+        .method = HTTP_OPTIONS,
+        .handler = mod_web_api_options,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_network_config_opt);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register OPTIONS /api/network/config handler");
+        return ret;
+    }
+
+    // Also add OPTIONS for the canonical /api/net/config
+    httpd_uri_t uri_net_config_opt = {
+        .uri = "/api/net/config",
+        .method = HTTP_OPTIONS,
+        .handler = mod_web_api_options,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_net_config_opt);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register OPTIONS /api/net/config handler");
+        return ret;
+    }
     // GET /api/net/status (additional endpoint for status)
     httpd_uri_t uri_net_status = {
         .uri = "/api/net/status",
@@ -181,6 +243,45 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
     ret = httpd_register_uri_handler(server, &uri_net_status);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register /api/net/status handler");
+        return ret;
+    }
+
+    // Also register legacy '/api/network/status'
+    httpd_uri_t uri_network_status = {
+        .uri = "/api/network/status",
+        .method = HTTP_GET,
+        .handler = mod_web_api_network_status,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_network_status);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/network/status handler");
+        return ret;
+    }
+
+    // GET /api/network/status/scan -> Wi-Fi scan (returns empty list until implemented)
+    httpd_uri_t uri_network_scan = {
+        .uri = "/api/network/status/scan",
+        .method = HTTP_GET,
+        .handler = mod_web_api_network_scan,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_network_scan);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/network/status/scan handler");
+        return ret;
+    }
+
+    // Alias: GET /api/net/status/scan
+    httpd_uri_t uri_net_scan = {
+        .uri = "/api/net/status/scan",
+        .method = HTTP_GET,
+        .handler = mod_web_api_network_scan,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_net_scan);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/net/status/scan handler");
         return ret;
     }
 
@@ -196,6 +297,21 @@ esp_err_t mod_web_register_routes(httpd_handle_t server)
         ESP_LOGE(TAG, "Failed to register /api/net/failure handler");
         return ret;
     }
+
+    // Also register legacy '/api/network/failure'
+    httpd_uri_t uri_network_fail = {
+        .uri = "/api/network/failure",
+        .method = HTTP_GET,
+        .handler = mod_web_api_network_failure,
+        .user_ctx = NULL
+    };
+    ret = httpd_register_uri_handler(server, &uri_network_fail);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register /api/network/failure handler");
+        return ret;
+    }
+
+    // OPTIONS handlers already registered next to their corresponding POST endpoints above.
 
     // ========== WebSocket Handler ==========
     

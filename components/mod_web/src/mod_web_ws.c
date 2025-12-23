@@ -204,7 +204,9 @@ static void ws_send_system_status(void)
 {
     uint32_t uptime_sec = (uint32_t)(esp_timer_get_time() / 1000000);
     uint32_t free_heap = esp_get_free_heap_size();
-    uint8_t cpu_load = 0; // TODO: Calculate from FreeRTOS stats
+    uint8_t cpu_load = 0;
+    sys_state_t* s = sys_get_state();
+    if (s) cpu_load = s->cpu_load;
     
     // Build data object
     cJSON *data = cJSON_CreateObject();

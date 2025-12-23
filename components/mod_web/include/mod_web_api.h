@@ -90,6 +90,18 @@ esp_err_t mod_web_api_network_failure(httpd_req_t *req);
  */
 esp_err_t mod_web_api_network_config(httpd_req_t *req);
 
+/**
+ * @brief GET /api/network/status/scan
+ *
+ * Returns a list of visible Wi-Fi networks (not implemented yet -> returns empty array)
+ */
+esp_err_t mod_web_api_network_scan(httpd_req_t *req);
+
+/**
+ * @brief OPTIONS handler for CORS preflight
+ */
+esp_err_t mod_web_api_options(httpd_req_t *req);
+
 #ifdef __cplusplus
 }
 #endif
