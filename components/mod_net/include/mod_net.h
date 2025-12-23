@@ -34,6 +34,24 @@ void net_get_status(net_status_t* status);
  */
 void net_reload_config(void);
 
+/* WiFi helpers (exposed so other modules can request AP/STA start/stop) */
+esp_err_t net_wifi_start_sta(const char* ssid, const char* pass);
+esp_err_t net_wifi_start_ap(const char* ssid, const char* pass);
+esp_err_t net_wifi_stop(void);
+
+/**
+ * @brief Set current network mode state (helper for WiFi/Ethernet start)
+ *
+ * This is used by helpers to mark the intended/current mode during startup.
+ */
+void net_set_current_mode(net_mode_t mode);
+
+/**
+ * @brief Enable or disable Ethernet (W5500) at runtime.
+ * If enabling, attempts to start the Ethernet driver; if disabling, stops it.
+ */
+esp_err_t net_set_eth_enabled(bool enable);
+
 /**
  * @brief Read last recorded network failure (JSON string) from NVS
  *

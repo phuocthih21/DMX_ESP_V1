@@ -528,6 +528,38 @@ esp_err_t mod_web_api_network_config(httpd_req_t *req)
         }
     }
 
+    // WiFi AP (rescue) configuration
+    cJSON *wifi_ap = cJSON_GetObjectItem(json, "wifi_ap");
+    if (wifi_ap != NULL) {
+        cJSON *ssid = cJSON_GetObjectItem(wifi_ap, "ssid");
+        cJSON *password = cJSON_GetObjectItem(wifi_ap, "password");
+        cJSON *dhcp = cJSON_GetObjectItem(wifi_ap, "dhcp");
+        cJSON *ip = cJSON_GetObjectItem(wifi_ap, "ip");
+        cJSON *netmask = cJSON_GetObjectItem(wifi_ap, "netmask");
+        cJSON *gateway = cJSON_GetObjectItem(wifi_ap, "gateway");
+        cJSON *channel = cJSON_GetObjectItem(wifi_ap, "channel");
+
+        if (ssid != NULL && cJSON_IsString(ssid)) {
+            strncpy(new_net.ap_ssid, ssid->valuestring, sizeof(new_net.ap_ssid) - 1);
+        }
+        if (password != NULL && cJSON_IsString(password)) {
+            strncpy(new_net.ap_pass, password->valuestring, sizeof(new_net.ap_pass) - 1);
+        }
+        new_net.ap_dhcp_enabled = (dhcp != NULL && cJSON_IsTrue(dhcp));
+        if (ip != NULL && cJSON_IsString(ip)) {
+            strncpy(new_net.ap_ip, ip->valuestring, sizeof(new_net.ap_ip) - 1);
+        }
+        if (netmask != NULL && cJSON_IsString(netmask)) {
+            strncpy(new_net.ap_netmask, netmask->valuestring, sizeof(new_net.ap_netmask) - 1);
+        }
+        if (gateway != NULL && cJSON_IsString(gateway)) {
+            strncpy(new_net.ap_gateway, gateway->valuestring, sizeof(new_net.ap_gateway) - 1);
+        }
+        if (channel != NULL && cJSON_IsNumber(channel)) {
+            new_net.ap_channel = (uint8_t)channel->valueint;
+        }
+    }
+
     cJSON_Delete(json);
 
     // Apply configuration via SYS_MOD

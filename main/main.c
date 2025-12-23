@@ -153,15 +153,7 @@ void app_main(void)
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "");
 
-    // Step 1: Pre-Boot Check
-    boot_mode_t mode = startup_decide_mode();
-    if (mode == BOOT_MODE_FACTORY_RESET) {
-        ESP_LOGI(TAG, "Factory reset requested; startup handles it and reboots");
-        return;
-    }
-
-    // Step 2: Global Init
-    ESP_LOGI(TAG, "--- Global Initialization ---");
+    // Initialize NVS Flash earliest to ensure other subsystems (crash monitor, sys_setup) can access NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGW(TAG, "NVS partition needs erase; erasing...");
@@ -170,6 +162,13 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
     ESP_LOGI(TAG, "NVS flash initialized");
+
+    // Step 1: Pre-Boot Check
+    boot_mode_t mode = startup_decide_mode();
+    if (mode == BOOT_MODE_FACTORY_RESET) {
+        ESP_LOGI(TAG, "Factory reset requested; startup handles it and reboots");
+        return;
+    }
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_LOGI(TAG, "Network interface initialized");

@@ -82,18 +82,38 @@ typedef struct {
 /**
  * @brief Network configuration
  * Size: 256 bytes (aligned)
+ *
+ * Note: To support separate STA and AP credentials while keeping the
+ * total struct size stable for NVS storage, some string fields are
+ * shortened (SSID/password/hostname) and reserved bytes adjusted.
  */
 typedef struct {
-    bool dhcp_enabled;      // DHCP on/off
-    char ip[16];            // Static IP: "192.168.1.100"
-    char netmask[16];       // Netmask: "255.255.255.0"
-    char gateway[16];       // Gateway: "192.168.1.1"
-    char wifi_ssid[32];     // WiFi SSID
-    char wifi_pass[64];     // WiFi password
-    uint8_t wifi_channel;   // WiFi channel: 1-13
+    bool dhcp_enabled;      // DHCP on/off (STA)
+    char ip[16];            // Static IP (STA): "192.168.1.100"
+    char netmask[16];       // Netmask (STA): "255.255.255.0"
+    char gateway[16];       // Gateway (STA): "192.168.1.1"
+
+    /* STA credentials (smaller to make room for AP fields) */
+    char wifi_ssid[24];     // WiFi STA SSID (max 23 chars + NUL)
+    char wifi_pass[32];     // WiFi STA password (max 31 chars + NUL)
+    uint8_t wifi_channel;   // WiFi channel: 1-13 (STA preference)
     int8_t wifi_tx_power;   // TX power: 0-78 (dBm * 4)
-    char hostname[32];      // mDNS hostname
-    uint8_t reserved[77];   // Reserved (was 96, adjusted to make total 256)
+
+    char hostname[24];      // mDNS hostname (shortened)
+
+    bool eth_enabled;       // Ethernet (W5500) enabled at boot
+    bool wifi_enabled;      // WiFi enabled at boot
+
+    /* AP (rescue) configuration */
+    char ap_ssid[24];       // AP SSID (max 23 chars + NUL)
+    char ap_pass[32];       // AP password (max 31 chars + NUL)
+    bool ap_dhcp_enabled;   // If true, AP acts as DHCP server (default true)
+    char ap_ip[16];         // AP IP: "192.168.4.1"
+    char ap_netmask[16];    // AP netmask
+    char ap_gateway[16];    // AP gateway
+    uint8_t ap_channel;     // AP channel: 1-13
+
+    uint8_t reserved[17];   // Reserved (adjusted to maintain total size)
 } net_config_t;
 
 /* ========== SYSTEM CONFIGURATION ========== */

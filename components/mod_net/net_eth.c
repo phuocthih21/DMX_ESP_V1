@@ -329,8 +329,8 @@ esp_err_t net_eth_start(void) {
         if (link_sem) {
             esp_err_t _er = esp_event_handler_register(ETH_EVENT, ETHERNET_EVENT_CONNECTED, &net_tmp_eth_connected, link_sem);
             if (_er == ESP_OK) {
-                if (xSemaphoreTake(link_sem, pdMS_TO_TICKS(2000)) != pdTRUE) {
-                    ESP_LOGW(TAG, "No ETH link detected after start; uninstalling W5500 driver to avoid faults");
+                if (xSemaphoreTake(link_sem, pdMS_TO_TICKS(5000)) != pdTRUE) {
+                    ESP_LOGW(TAG, "No ETH link detected after 5s; uninstalling W5500 driver to avoid faults");
                     net_write_failure_report(ESP_ERR_TIMEOUT, "no_link_after_start", 0);
                     esp_err_t stopret = esp_eth_stop(s_eth_handle);
                     if (stopret != ESP_OK) ESP_LOGW(TAG, "esp_eth_stop returned %d", stopret);

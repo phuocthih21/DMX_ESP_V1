@@ -34,22 +34,37 @@ static const sys_config_t DEFAULT_CONFIG = {
         .ip = "192.168.1.100",
         .netmask = "255.255.255.0",
         .gateway = "192.168.1.1",
+
+        /* STA (leave empty by default so device falls back to AP) */
         .wifi_ssid = "",
         .wifi_pass = "",
         .wifi_channel = 6,
         .wifi_tx_power = 78,  // Max power
+
         .hostname = "dmx-node",
+        .eth_enabled = true, // Enabled by default for board connectivity
+        .wifi_enabled = true, // WiFi enabled by default so AP can be started
+
+        /* AP (rescue) defaults requested by user */
+        .ap_ssid = "DMX-Node-Config",
+        .ap_pass = "12345678",
+        .ap_dhcp_enabled = true,
+        .ap_ip = "192.168.4.1",
+        .ap_netmask = "255.255.255.0",
+        .ap_gateway = "192.168.4.1",
+        .ap_channel = 6,
+
         .reserved = {0}
     },
     
     .ports = {
-        {.enabled = true, .protocol = PROTOCOL_ARTNET, .universe = 0, .rdm_enabled = false, 
+        {.enabled = false, .protocol = PROTOCOL_ARTNET, .universe = 0, .rdm_enabled = false, 
          .timing = {.break_us = 176, .mab_us = 12, .refresh_rate = 40}},
-        {.enabled = true, .protocol = PROTOCOL_ARTNET, .universe = 1, .rdm_enabled = false,
+        {.enabled = false, .protocol = PROTOCOL_ARTNET, .universe = 1, .rdm_enabled = false,
          .timing = {.break_us = 176, .mab_us = 12, .refresh_rate = 40}},
-        {.enabled = false, .protocol = PROTOCOL_ARTNET, .universe = 2, .rdm_enabled = false,
+        {.enabled = true, .protocol = PROTOCOL_ARTNET, .universe = 2, .rdm_enabled = false,
          .timing = {.break_us = 176, .mab_us = 12, .refresh_rate = 40}},
-        {.enabled = false, .protocol = PROTOCOL_ARTNET, .universe = 3, .rdm_enabled = false,
+        {.enabled = true, .protocol = PROTOCOL_ARTNET, .universe = 3, .rdm_enabled = false,
          .timing = {.break_us = 176, .mab_us = 12, .refresh_rate = 40}}
     },
     
@@ -73,6 +88,23 @@ uint32_t sys_calculate_config_crc(const sys_config_t* cfg);  // Non-static for s
 
 const sys_config_t* sys_get_config(void) {
     return &g_sys_config;
+}
+
+esp_err_t sys_get_config_snapshot(sys_config_t *out, TickType_t ticks_to_wait) {
+    if (!out) {
+        ESP_LOGE(TAG, "sys_get_config_snapshot: NULL out pointer");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    SemaphoreHandle_t mutex = (SemaphoreHandle_t)g_sys_state.config_mutex;
+    if (xSemaphoreTake(mutex, ticks_to_wait) != pdTRUE) {
+        ESP_LOGW(TAG, "sys_get_config_snapshot: mutex take timed out");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    memcpy(out, &g_sys_config, sizeof(sys_config_t));
+    xSemaphoreGive(mutex);
+    return ESP_OK;
 }
 
 esp_err_t sys_update_port_cfg(int port_idx, const dmx_port_cfg_t* new_cfg) {

@@ -130,18 +130,36 @@ esp_err_t dmx_init(void)
         }
     }
 
-    // Init RMT ports
+    // Init RMT ports only if enabled and configured for RMT
     esp_err_t ret;
-    ret = dmx_rmt_init(DMX_PORT_A, GPIO_PORT_A_TX);
-    if (ret != ESP_OK) { ESP_LOGE(TAG, "init port A failed: %d", ret); return ret; }
-    ret = dmx_rmt_init(DMX_PORT_B, GPIO_PORT_B_TX);
-    if (ret != ESP_OK) { ESP_LOGE(TAG, "init port B failed: %d", ret); return ret; }
+    if (s_ports[DMX_PORT_A].enabled && s_ports[DMX_PORT_A].backend == DMX_BACKEND_RMT) {
+        ret = dmx_rmt_init(DMX_PORT_A, GPIO_PORT_A_TX);
+        if (ret != ESP_OK) { ESP_LOGE(TAG, "init port A failed: %d", ret); return ret; }
+    } else {
+        ESP_LOGI(TAG, "Skipping RMT init for Port A (enabled=%d backend=%d)", s_ports[DMX_PORT_A].enabled, s_ports[DMX_PORT_A].backend);
+    }
 
-    // Init UART ports
-    ret = dmx_uart_init_port(DMX_PORT_C, UART_NUM_1, GPIO_PORT_C_TX, GPIO_PORT_C_DE);
-    if (ret != ESP_OK) { ESP_LOGE(TAG, "init port C failed: %d", ret); return ret; }
-    ret = dmx_uart_init_port(DMX_PORT_D, UART_NUM_2, GPIO_PORT_D_TX, GPIO_PORT_D_DE);
-    if (ret != ESP_OK) { ESP_LOGE(TAG, "init port D failed: %d", ret); return ret; }
+    if (s_ports[DMX_PORT_B].enabled && s_ports[DMX_PORT_B].backend == DMX_BACKEND_RMT) {
+        ret = dmx_rmt_init(DMX_PORT_B, GPIO_PORT_B_TX);
+        if (ret != ESP_OK) { ESP_LOGE(TAG, "init port B failed: %d", ret); return ret; }
+    } else {
+        ESP_LOGI(TAG, "Skipping RMT init for Port B (enabled=%d backend=%d)", s_ports[DMX_PORT_B].enabled, s_ports[DMX_PORT_B].backend);
+    }
+
+    // Init UART ports only if enabled and configured for UART
+    if (s_ports[DMX_PORT_C].enabled && s_ports[DMX_PORT_C].backend == DMX_BACKEND_UART) {
+        ret = dmx_uart_init_port(DMX_PORT_C, UART_NUM_1, GPIO_PORT_C_TX, GPIO_PORT_C_DE);
+        if (ret != ESP_OK) { ESP_LOGE(TAG, "init port C failed: %d", ret); return ret; }
+    } else {
+        ESP_LOGI(TAG, "Skipping UART init for Port C (enabled=%d backend=%d)", s_ports[DMX_PORT_C].enabled, s_ports[DMX_PORT_C].backend);
+    }
+
+    if (s_ports[DMX_PORT_D].enabled && s_ports[DMX_PORT_D].backend == DMX_BACKEND_UART) {
+        ret = dmx_uart_init_port(DMX_PORT_D, UART_NUM_2, GPIO_PORT_D_TX, GPIO_PORT_D_DE);
+        if (ret != ESP_OK) { ESP_LOGE(TAG, "init port D failed: %d", ret); return ret; }
+    } else {
+        ESP_LOGI(TAG, "Skipping UART init for Port D (enabled=%d backend=%d)", s_ports[DMX_PORT_D].enabled, s_ports[DMX_PORT_D].backend);
+    }
 
     ESP_LOGI(TAG, "DMX initialized");
     return ESP_OK;

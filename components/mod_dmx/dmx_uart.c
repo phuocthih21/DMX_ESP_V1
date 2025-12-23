@@ -44,7 +44,8 @@ esp_err_t dmx_uart_init_port(int port_idx, uart_port_t uart_num, int tx_pin, int
 
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_cfg));
     ESP_ERROR_CHECK(uart_set_pin(uart_num, tx_pin, -1, -1, -1));
-    ESP_ERROR_CHECK(uart_driver_install(uart_num, 0, 1024, 0, NULL, 0));
+    /* RX buffer must be non-zero; DMX only uses TX but some UART drivers require RX buffer > 0 */
+    ESP_ERROR_CHECK(uart_driver_install(uart_num, 2048, 1024, 0, NULL, 0));
 
     // Configure DE pin for RS485
     gpio_config_t de_cfg = {

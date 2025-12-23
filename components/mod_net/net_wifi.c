@@ -3,6 +3,7 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "sys_mod.h"
+#include "mod_net.h"
 #include "lwip/inet.h"
 #include <string.h>
 
@@ -10,11 +11,27 @@ static const char* TAG = "NET_WIFI";
 static esp_netif_t* s_sta_netif = NULL;
 static esp_netif_t* s_ap_netif = NULL;
 
+// Forward declaration to allow STA startup to fall back to AP when SSID is empty
+esp_err_t net_wifi_start_ap(const char* ssid, const char* pass);
+
 esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
     ESP_LOGI(TAG, "Starting WiFi STA (SSID=%s)", ssid ? ssid : "<null>");
 
+    /* If no SSID is provided, start AP mode instead (uses hostname) */
+    if (!ssid || ssid[0] == '\0') {
+        const sys_config_t* cfg = sys_get_config();
+        ESP_LOGI(TAG, "SSID empty; starting AP mode using hostname %s", cfg->net.hostname);
+        esp_err_t ap_ret = net_wifi_start_ap(cfg->net.hostname, NULL);
+        if (ap_ret != ESP_OK) {
+            ESP_LOGW(TAG, "AP fallback failed: %s (%d)", esp_err_to_name(ap_ret), ap_ret);
+        }
+        return ap_ret;
+    }
+
     esp_err_t ret = esp_wifi_init(&(wifi_init_config_t)WIFI_INIT_CONFIG_DEFAULT());
-    if (ret != ESP_OK) {
+    if (ret == ESP_ERR_INVALID_STATE) {
+        ESP_LOGD(TAG, "esp_wifi_init already initialized (IGNORING)");
+    } else if (ret != ESP_OK) {
         ESP_LOGE(TAG, "esp_wifi_init failed: %d", ret);
         return ret;
     }
@@ -27,7 +44,7 @@ esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
             return ESP_FAIL;
         }
     } else {
-        ESP_LOGI(TAG, "WiFi STA netif already exists");
+        ESP_LOGD(TAG, "WiFi STA netif already exists");
     }
     esp_netif_t* sta_netif = s_sta_netif;
 
@@ -79,16 +96,27 @@ esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
         ESP_LOGW(TAG, "esp_wifi_connect returned: %d", ret);
     }
 
+    // Mark that STA mode is active (connection event will set wifi_connected)
+    net_set_current_mode(NET_MODE_WIFI_STA);
+
     ESP_LOGI(TAG, "WiFi STA started");
     return ESP_OK;
 }
 
 esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
-    ESP_LOGI(TAG, "Starting WiFi AP (SSID=%s)", ssid ? ssid : "DMX-AP");
+    /* Prefer provided SSID/pass, otherwise fall back to system AP config */
+    const sys_config_t* cfg = sys_get_config();
+    const char* use_ssid = (ssid && ssid[0]) ? ssid : (cfg ? cfg->net.ap_ssid : NULL);
+    const char* use_pass = (pass && pass[0]) ? pass : (cfg ? cfg->net.ap_pass : NULL);
+    const char* ssid_name = use_ssid ? use_ssid : "DMX-AP";
+
+    ESP_LOGI(TAG, "Starting WiFi AP (SSID=%s)", ssid_name);
 
     esp_err_t ret = esp_wifi_init(&(wifi_init_config_t)WIFI_INIT_CONFIG_DEFAULT());
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_init failed: %d", ret);
+    if (ret == ESP_ERR_INVALID_STATE) {
+        ESP_LOGD(TAG, "esp_wifi_init already initialized (IGNORING)");
+    } else if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "esp_wifi_init failed: %s (%d)", esp_err_to_name(ret), ret);
         return ret;
     }
 
@@ -99,44 +127,70 @@ esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
             ESP_LOGE(TAG, "Failed to create WiFi AP netif");
             return ESP_FAIL;
         }
-    } else {
-        ESP_LOGI(TAG, "WiFi AP netif already exists");
     }
 
     wifi_config_t wifi_config = {0};
-    if (ssid) {
-        strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
-        wifi_config.ap.ssid_len = strlen(ssid);
+    if (use_ssid) {
+        strncpy((char*)wifi_config.ap.ssid, use_ssid, sizeof(wifi_config.ap.ssid)-1);
+        wifi_config.ap.ssid[sizeof(wifi_config.ap.ssid)-1] = '\0';
+        wifi_config.ap.ssid_len = strnlen((const char*)wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid));
     }
-    if (pass) {
-        strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
+    if (use_pass) {
+        strncpy((char*)wifi_config.ap.password, use_pass, sizeof(wifi_config.ap.password)-1);
+        wifi_config.ap.password[sizeof(wifi_config.ap.password)-1] = '\0';
         wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+        ESP_LOGD(TAG, "AP using WPA PSK (password length=%d)", (int)strlen((const char*)wifi_config.ap.password));
     } else {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    wifi_config.ap.channel = 6;
+    /* Apply AP channel from config if present */
+    if (cfg) {
+        if (cfg->net.ap_channel >= 1 && cfg->net.ap_channel <= 13) {
+            wifi_config.ap.channel = cfg->net.ap_channel;
+        } else {
+            wifi_config.ap.channel = 6;
+        }
+    } else {
+        wifi_config.ap.channel = 6;
+    }
     wifi_config.ap.max_connection = 4;
 
     ret = esp_wifi_set_mode(WIFI_MODE_AP);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_mode failed: %d", ret);
+        ESP_LOGE(TAG, "esp_wifi_set_mode failed: %s (%d)", esp_err_to_name(ret), ret);
         return ret;
     }
 
     ret = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_config AP failed: %d", ret);
+        ESP_LOGE(TAG, "esp_wifi_set_config AP failed: %s (%d)", esp_err_to_name(ret), ret);
         return ret;
+    }
+
+    /* Apply AP IP/netmask/gateway if provided in config */
+    if (cfg && cfg->net.ap_ip[0] != '\0') {
+        esp_netif_ip_info_t ip_info = {0};
+        if (esp_netif_str_to_ip4(cfg->net.ap_ip, &ip_info.ip) == ESP_OK &&
+            esp_netif_str_to_ip4(cfg->net.ap_netmask, &ip_info.netmask) == ESP_OK &&
+            esp_netif_str_to_ip4(cfg->net.ap_gateway, &ip_info.gw) == ESP_OK) {
+            ESP_LOGI(TAG, "Applying AP IP %s", cfg->net.ap_ip);
+            esp_netif_set_ip_info(s_ap_netif, &ip_info);
+        } else {
+            ESP_LOGW(TAG, "Invalid AP IP/netmask/gateway in config");
+        }
     }
 
     ret = esp_wifi_start();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_start AP failed: %d", ret);
+        ESP_LOGE(TAG, "esp_wifi_start AP failed: %s (%d)", esp_err_to_name(ret), ret);
         return ret;
     }
 
-    ESP_LOGI(TAG, "WiFi AP started: %s", ssid ? ssid : "DMX-AP");
+    // Mark that AP mode is active
+    net_set_current_mode(NET_MODE_WIFI_AP);
+
+    ESP_LOGI(TAG, "WiFi AP started: %s", ssid_name);
     return ESP_OK;
 }
 

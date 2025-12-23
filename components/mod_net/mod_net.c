@@ -145,9 +145,16 @@ static void net_wifi_event_handler(void* arg, esp_event_base_t event_base,
 esp_err_t net_init(const net_config_t* cfg) {
     ESP_LOGI(TAG, "Initializing network manager");
 
-    // Use provided config or read from sys_config
-    const sys_config_t* sys_cfg = sys_get_config();
-    const net_config_t* net_cfg = cfg ? cfg : &sys_cfg->net;
+    // Use provided config or read a snapshot from sys_config (safer for multi-step operations)
+    sys_config_t cfg_snap;
+    const net_config_t* net_cfg = NULL;
+    if (sys_get_config_snapshot(&cfg_snap, pdMS_TO_TICKS(500)) == ESP_OK) {
+        net_cfg = cfg ? cfg : &cfg_snap.net;
+    } else {
+        ESP_LOGW(TAG, "sys_get_config_snapshot timed out, falling back to live config");
+        const sys_config_t* sys_cfg = sys_get_config();
+        net_cfg = cfg ? cfg : &sys_cfg->net;
+    }
 
     // Initialize TCP/IP stack
     esp_err_t err = esp_netif_init();
@@ -204,18 +211,61 @@ esp_err_t net_init(const net_config_t* cfg) {
     net_write_last_action("eth_start");
     err = net_eth_start();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Ethernet start failed (%s), trying WiFi STA", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Ethernet start failed (%s), will try WiFi STA", esp_err_to_name(err));
         sys_send_event(SYS_EVT_ERROR, NULL, 0);
         net_write_last_action("wifi_start");
-        net_wifi_start_sta(net_cfg->wifi_ssid, net_cfg->wifi_pass);
+
+        // Re-read config snapshot before WiFi start
+        sys_config_t cfg2;
+        if (sys_get_config_snapshot(&cfg2, pdMS_TO_TICKS(500)) == ESP_OK) {
+            if (cfg2.net.wifi_enabled) {
+                ESP_LOGI(TAG, "NET: WiFi STA starting (SSID=%s)", cfg2.net.wifi_ssid[0] ? cfg2.net.wifi_ssid : "<empty>");
+                net_wifi_start_sta(cfg2.net.wifi_ssid, cfg2.net.wifi_pass);
+                for (int i = 0; i < 10 && !g_net_status.wifi_connected; ++i) vTaskDelay(pdMS_TO_TICKS(500));
+                if (!g_net_status.wifi_connected) {
+                    ESP_LOGW(TAG, "WiFi STA did not connect after 5s, falling back to AP");
+                    net_write_last_action("ap_start");
+                    net_wifi_start_ap(NULL, NULL);
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                }
+            }
+        } else {
+            const sys_config_t* live = sys_get_config();
+            if (live->net.wifi_enabled) {
+                ESP_LOGI(TAG, "NET: WiFi STA starting (SSID=%s)", live->net.wifi_ssid[0] ? live->net.wifi_ssid : "<empty>");
+                net_wifi_start_sta(live->net.wifi_ssid, live->net.wifi_pass);
+                for (int i = 0; i < 10 && !g_net_status.wifi_connected; ++i) vTaskDelay(pdMS_TO_TICKS(500));
+                if (!g_net_status.wifi_connected) {
+                    ESP_LOGW(TAG, "WiFi STA did not connect after 5s, falling back to AP");
+                    net_write_last_action("ap_start");
+                    net_wifi_start_ap(NULL, NULL);
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                }
+            }
+        }
     }
 
-    // Wait briefly for link detection; if no link -> start WiFi
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    // Wait up to 5s for link detection (poll every 500ms); if no link -> start WiFi
+    for (int i = 0; i < 10 && !g_net_status.eth_connected; ++i) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
     if (!g_net_status.eth_connected) {
-        ESP_LOGW(TAG, "No Ethernet link detected, starting WiFi STA");
+        ESP_LOGW(TAG, "No Ethernet link detected after 5s, starting WiFi STA");
         sys_send_event(SYS_EVT_ERROR, NULL, 0);
-        net_wifi_start_sta(net_cfg->wifi_ssid, net_cfg->wifi_pass);
+        // Use latest config snapshot before starting WiFi
+        sys_config_t cfg2;
+        if (sys_get_config_snapshot(&cfg2, pdMS_TO_TICKS(500)) == ESP_OK) {
+            if (cfg2.net.wifi_enabled) {
+                net_write_last_action("wifi_start");
+                net_wifi_start_sta(cfg2.net.wifi_ssid, cfg2.net.wifi_pass);
+            }
+        } else {
+            const sys_config_t* live = sys_get_config();
+            if (live->net.wifi_enabled) {
+                net_write_last_action("wifi_start");
+                net_wifi_start_sta(live->net.wifi_ssid, live->net.wifi_pass);
+            }
+        }
     }
 
     // Wait briefly for link detection; if no link -> start WiFi
@@ -228,6 +278,17 @@ esp_err_t net_init(const net_config_t* cfg) {
     // mDNS will start when IP is acquired (in IP event handler)
 
     return ESP_OK;
+}
+
+void net_set_current_mode(net_mode_t mode) {
+    g_net_status.current_mode = mode;
+    /* Reset connection flags until events come in for the new mode */
+    if (mode == NET_MODE_WIFI_STA || mode == NET_MODE_WIFI_AP) {
+        g_net_status.wifi_connected = false;
+    }
+    if (mode == NET_MODE_ETHERNET) {
+        g_net_status.eth_connected = false;
+    }
 }
 
 void net_get_status(net_status_t* status) {
@@ -298,7 +359,8 @@ esp_err_t net_get_last_action(char *buf, size_t buf_len)
     return r;
 }
 
-void net_reload_config(void) {
+void net_reload_config(void) 
+{
     ESP_LOGI(TAG, "Reloading network config and applying changes");
     // For now, just restart interfaces according to new config
     const sys_config_t* cfg = sys_get_config();

@@ -18,6 +18,7 @@
 #include "dmx_types.h"
 #include "esp_err.h"
 #include "sys_event.h"
+#include "freertos/FreeRTOS.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -254,6 +255,19 @@ esp_err_t sys_snapshot_record(int port_idx);
  * @return ESP_OK if snapshot exists, ESP_ERR_NOT_FOUND otherwise
  */
 esp_err_t sys_snapshot_restore(int port_idx, uint8_t* out_buffer);
+
+/**
+ * @brief Get a consistent snapshot copy of the runtime configuration
+ *
+ * This function acquires the sys_mod configuration mutex for up to
+ * `ticks_to_wait` FreeRTOS ticks and copies the current configuration
+ * into the caller-provided `out` buffer.
+ *
+ * @param out Pointer to destination `sys_config_t`
+ * @param ticks_to_wait Timeout in FreeRTOS ticks to wait for the mutex (use portMAX_DELAY to block)
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG if `out` is NULL, ESP_ERR_TIMEOUT if mutex not acquired
+ */
+esp_err_t sys_get_config_snapshot(sys_config_t *out, TickType_t ticks_to_wait);
 
 /* ========== EVENT SYSTEM ========== */
 
