@@ -54,16 +54,16 @@ export const SystemMetrics: React.FC = () => {
           </div>
         )}
       </div>
-      {info.device_id && (
+      {info.device && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <p className="text-sm text-gray-500">Device ID</p>
-          <p className="text-sm font-mono text-gray-900">{info.device_id}</p>
+          <p className="text-sm font-mono text-gray-900">{info.device}</p>
         </div>
       )}
-      {info.firmware_version && (
+      {info.version && (
         <div className="mt-2">
           <p className="text-sm text-gray-500">Firmware Version</p>
-          <p className="text-sm font-mono text-gray-900">{info.firmware_version}</p>
+          <p className="text-sm font-mono text-gray-900">{info.version}</p>
         </div>
       )}
     </div>

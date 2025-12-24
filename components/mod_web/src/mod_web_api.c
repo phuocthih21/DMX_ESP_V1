@@ -51,12 +51,12 @@ esp_err_t mod_web_api_system_info(httpd_req_t *req)
     cJSON *root = cJSON_CreateObject();
 
     cJSON_AddStringToObject(root, "device", cfg->device_label);
-    cJSON_AddStringToObject(root, "version", "4.0.0");
+    cJSON_AddStringToObject(root, "version", cfg->version == 1 ? "1.0" : "unknown");
     cJSON_AddNumberToObject(root, "uptime", uptime_sec);
     cJSON_AddNumberToObject(root, "free_heap", free_heap);
     const sys_state_t *state = sys_get_state();
     uint8_t cpu = state ? state->cpu_load : 0;
-    cJSON_AddNumberToObject(root, "cpu", cpu);
+    cJSON_AddNumberToObject(root, "cpu_load", cpu);
     cJSON_AddBoolToObject(root, "eth_up", net_status.eth_connected);
     cJSON_AddBoolToObject(root, "wifi_up", net_status.wifi_connected);
     

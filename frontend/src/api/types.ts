@@ -15,8 +15,8 @@ export interface ApiResponse<T> {
  * System Information
  */
 export interface SystemInfo {
-  device_id?: string;
-  firmware_version?: string;
+  device?: string;
+  version?: string;
   uptime: number; // seconds
   cpu_load?: number; // percentage
   free_heap?: number; // bytes

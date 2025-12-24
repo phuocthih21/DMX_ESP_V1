@@ -1,90 +1,78 @@
-/**
- * DMX port configuration page
- */
-
 import React, { useState, useEffect } from 'react';
 import { PortConfig } from '../components/dmx/PortConfig';
-import { PortStatus } from '../components/dmx/PortStatus';
 import { useDMXStore } from '../stores/dmxStore';
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../api/endpoints';
-import { DMXPortStatus, DMXPortConfig, DMXConfig } from '../api/types';
-import { usePolling } from '../hooks/usePolling';
-import { POLL_INTERVAL_DMX } from '../utils/constants';
+import { DMXPortStatus, DMXPortConfig } from '../api/types';
 import { useToast } from '../components/shared/Toast';
 
 export const DMXConfigPage: React.FC = () => {
-  const { ports, setPorts, setLoading, setError } = useDMXStore();
+  const { ports, setPorts } = useDMXStore();
   const [savingPort, setSavingPort] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { showToast } = useToast();
 
-  // Poll DMX status
-  usePolling({
-    interval: POLL_INTERVAL_DMX,
-    onPoll: async () => {
+  // Load data ONCE on mount (Thay thế Polling)
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
       try {
-        setLoading(true);
         const response = await apiClient.get(API_ENDPOINTS.DMX_STATUS);
         const portsData = Array.isArray(response.data)
           ? response.data
-          : (response.data && Array.isArray(response.data.ports) ? response.data.ports : []);
+          : (response.data?.ports || []);
+        
+        console.log("Loaded DMX Config:", portsData);
         setPorts(portsData as DMXPortStatus[]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to fetch DMX status';
-        setError(message);
+      } catch (err) {
+        console.error("Load failed", err);
+        showToast("Failed to load configuration", "error");
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
-    },
-  });
+    };
 
-  const handleConfigChange = (portConfig: DMXPortConfig) => {
-    // Update local state immediately for better UX
-    const updatedPorts = ports.map((p) =>
-      p.port === portConfig.port
-        ? { ...p, ...portConfig }
-        : p
-    );
-    setPorts(updatedPorts);
+    fetchData();
+  }, [setPorts, showToast]);
+
+  const updatePort = (portNum: number, newConfig: DMXPortConfig) => {
+    const { updatePort } = useDMXStore.getState();
+    updatePort(portNum, newConfig);
   };
 
-  const handleSave = async (portConfig: DMXPortConfig) => {
-    setSavingPort(portConfig.port);
+  const handleSave = async (portNum: number, currentConfig: DMXPortConfig) => {
     try {
-      const config: DMXConfig = {
-        ports: [portConfig],
+      setSavingPort(portNum);
+      
+      const payload = {
+        port: portNum,
+        universe: Number(currentConfig.universe) || 1,
+        enabled: Boolean(currentConfig.enabled),
+        break_us: currentConfig.break_us ? Number(currentConfig.break_us) : 176,
+        mab_us: currentConfig.mab_us ? Number(currentConfig.mab_us) : 12,
       };
 
-      await apiClient.post(API_ENDPOINTS.DMX_CONFIG, config);
-      showToast(`Port ${String.fromCharCode(65 + portConfig.port)} configuration saved`, 'success');
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Failed to save configuration',
-        'error'
-      );
-      // Reload status on error
+      console.log(`Sending DMX Config for Port ${portNum}:`, payload);
+
+      await apiClient.post(API_ENDPOINTS.DMX_CONFIG, payload);
+      showToast(`Port ${portNum} configuration saved`, 'success');
+      
+      // Refresh data sau khi save thành công
       const response = await apiClient.get(API_ENDPOINTS.DMX_STATUS);
-      const portsData = Array.isArray(response.data)
-        ? response.data
-        : (response.data && Array.isArray(response.data.ports) ? response.data.ports : []);
-      setPorts(portsData as DMXPortStatus[]);
+      if(response.data?.ports) setPorts(response.data.ports);
+
+    } catch (error: any) {
+      console.error('Save failed:', error);
+      const msg = error.response?.data?.error || error.message || "Unknown error";
+      showToast(`Failed to save: ${msg}`, 'error');
     } finally {
       setSavingPort(null);
     }
   };
 
-  // Initialize ports if empty
-  useEffect(() => {
-    if (ports.length === 0) {
-      // Create default port configs
-      const defaultPorts: DMXPortStatus[] = [0, 1, 2, 3].map((port) => ({
-        port,
-        universe: port + 1,
-        enabled: false,
-      }));
-      setPorts(defaultPorts);
-    }
-  }, [ports.length, setPorts]);
+  if (isLoading && ports.length === 0) {
+      return <div className="p-8 text-center">Loading configuration...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -105,12 +93,12 @@ export const DMXConfigPage: React.FC = () => {
 
           return (
             <div key={portNum} className="space-y-4">
-              <PortStatus port={port} />
+              <h2 className="text-lg font-medium text-gray-900">Port {portNum}</h2>
               <PortConfig
                 port={portNum}
-                config={port}
-                onChange={handleConfigChange}
-                onSave={() => handleSave(port)}
+                config={port as DMXPortConfig}
+                onChange={(newConfig) => updatePort(portNum, newConfig)}
+                onSave={() => handleSave(portNum, port as DMXPortConfig)}
                 isSaving={savingPort === portNum}
               />
             </div>
@@ -120,4 +108,3 @@ export const DMXConfigPage: React.FC = () => {
     </div>
   );
 };
-

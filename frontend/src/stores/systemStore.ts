@@ -23,7 +23,14 @@ const initialState = {
 
 export const useSystemStore = create<SystemState>((set) => ({
   ...initialState,
-  setInfo: (info) => set({ info, error: null }),
+  setInfo: (payload) => set((state) => ({
+    // Logic: Nếu có payload mới, gộp nó vào state cũ.
+    // Nếu payload là null (reset), thì gán là null.
+    info: payload 
+      ? { ...state.info, ...payload } 
+      : null,
+    error: null 
+  })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () => set(initialState),

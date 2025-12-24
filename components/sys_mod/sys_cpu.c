@@ -67,7 +67,7 @@ void sys_cpu_task(void* arg)
             state->cpu_load = (uint8_t)(cpu_percent + 0.5f);
         }
 
-        ESP_LOGD(TAG, "Idle delta=%u idle_max=%.1f cpu=%.1f", delta, s_idle_max, cpu_percent);
+ //       ESP_LOGD(TAG, "Idle delta=%u idle_max=%.1f cpu=%.1f", delta, s_idle_max, cpu_percent);
     }
 }
 
