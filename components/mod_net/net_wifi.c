@@ -90,7 +90,7 @@ esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
     if (ssid) {
         strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
         wifi_config.ap.ssid[sizeof(wifi_config.ap.ssid) - 1] = '\0';
-        wifi_config.ap.ssid_len = strlen(ssid);
+        wifi_config.ap.ssid_len = strlen((char*)wifi_config.ap.ssid);
     }
     if (pass) {
         strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password) - 1);
