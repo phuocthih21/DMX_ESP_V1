@@ -190,13 +190,66 @@ void net_get_status(net_status_t* status) {
 
 void net_reload_config(void) {
     ESP_LOGI(TAG, "Reloading network config and applying changes");
-    // For now, just restart interfaces according to new config
     const sys_config_t* cfg = sys_get_config();
+    
+    // Apply static IP to running network interfaces if DHCP is disabled
+    if (cfg && !cfg->net.dhcp_enabled) {
+        esp_netif_ip_info_t ip_info = {0};
+        
+        // Parse static IP configuration
+        if (esp_netif_str_to_ip4(cfg->net.ip, &ip_info.ip) == ESP_OK &&
+            esp_netif_str_to_ip4(cfg->net.netmask, &ip_info.netmask) == ESP_OK &&
+            esp_netif_str_to_ip4(cfg->net.gateway, &ip_info.gw) == ESP_OK) {
+            
+            // Iterate through all active network interfaces and apply static IP
+            esp_netif_t *netif = esp_netif_next(NULL);
+            while (netif != NULL) {
+                // Stop DHCP client if running
+                esp_netif_dhcp_status_t dhcp_status;
+                if (esp_netif_dhcpc_get_status(netif, &dhcp_status) == ESP_OK) {
+                    if (dhcp_status == ESP_NETIF_DHCP_STARTED) {
+                        ESP_LOGI(TAG, "Stopping DHCP client on netif");
+                        esp_err_t ret = esp_netif_dhcpc_stop(netif);
+                        if (ret != ESP_OK) {
+                            ESP_LOGW(TAG, "Failed to stop DHCP client: %d", ret);
+                        }
+                    }
+                }
+                
+                // Apply static IP
+                esp_err_t ret = esp_netif_set_ip_info(netif, &ip_info);
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "Applied static IP %s to active netif", cfg->net.ip);
+                } else {
+                    ESP_LOGW(TAG, "Failed to apply static IP to netif: %d", ret);
+                }
+                
+                netif = esp_netif_next(netif);
+            }
+        } else {
+            ESP_LOGW(TAG, "Invalid static IP configuration, skipping apply");
+        }
+    } else if (cfg && cfg->net.dhcp_enabled) {
+        // If DHCP is enabled, restart DHCP client on active interfaces
+        esp_netif_t *netif = esp_netif_next(NULL);
+        while (netif != NULL) {
+            esp_netif_dhcp_status_t dhcp_status;
+            if (esp_netif_dhcpc_get_status(netif, &dhcp_status) == ESP_OK) {
+                if (dhcp_status != ESP_NETIF_DHCP_STARTED) {
+                    ESP_LOGI(TAG, "Starting DHCP client on netif");
+                    esp_err_t ret = esp_netif_dhcpc_start(netif);
+                    if (ret != ESP_OK) {
+                        ESP_LOGW(TAG, "Failed to start DHCP client: %d", ret);
+                    }
+                }
+            }
+            netif = esp_netif_next(netif);
+        }
+    }
 
-    // If DHCP disabled and static IP provided, apply to netifs when available (TODO)
-
-    // Try to reconnect WiFi with new settings
-    if (cfg->net.wifi_ssid[0]) {
+    // Handle interface switching: restart WiFi if configured
+    if (cfg && cfg->net.wifi_ssid[0]) {
+        net_wifi_stop();
         net_wifi_start_sta(cfg->net.wifi_ssid, cfg->net.wifi_pass);
     }
 }
