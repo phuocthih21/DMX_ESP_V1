@@ -107,18 +107,37 @@ All frontend components are properly implemented and ready to use:
 
 ### High Priority
 - [ ] Complete OTA implementation with esp_ota_* APIs
-- [ ] Add unit tests for FPS tracking
-- [ ] Add unit tests for import/export handlers
+- [x] Add unit tests for FPS tracking - **DONE** (test_sys_fps.c with 7 tests)
+- [x] Add unit tests for import/export handlers - **DONE** (test_web_api.c with 6 tests)
 
 ### Medium Priority  
-- [ ] Implement `net_reload_config()` for hot network configuration reload
-- [ ] Add authentication checks to file import/export endpoints (if needed)
-- [ ] Add configuration validation in import handler
+- [x] Implement `net_reload_config()` for hot network configuration reload - **DONE** (integrated in network config API)
+- [x] Add authentication checks to file import/export endpoints - **DONE** (both endpoints now require auth)
+- [x] Add configuration validation in import handler - **DONE** (validates JSON structure and field types)
 
 ### Low Priority
 - [ ] Add comprehensive API documentation (OpenAPI/Swagger)
 - [ ] Add WebSocket updates for real-time health metrics
 - [ ] Add configuration backup/restore history
+
+## Recent Enhancements (Latest Update)
+
+### Unit Tests Added ✅
+1. **FPS Tracking Tests** (`components/sys_mod/test/unit_test/main/test_sys_fps.c`)
+   - 7 comprehensive tests covering all FPS tracking scenarios
+   - Tests: no activity, single packet, steady rate, multiple ports, invalid ports, FPS capping, sliding window
+   
+2. **Config Import/Export Tests** (`components/mod_web/test/unit_test/main/test_web_api.c`)
+   - 6 comprehensive tests for configuration handling
+   - Tests: export structure, completeness, import parsing, validation, string safety, port config
+
+### Security Enhancements ✅
+- **File Export Protection**: `/api/file/export` now requires authentication (prevents unauthorized config access including WiFi passwords)
+- **File Import Protection**: `/api/file/import` now requires authentication (prevents unauthorized config changes)
+
+### Network Configuration Enhancement ✅
+- **Hot Reload**: Network config API now calls `net_reload_config()` immediately after saving
+- **Immediate Apply**: DHCP/Static IP changes apply to running interfaces without reboot
 
 ## Documentation References
 
