@@ -174,14 +174,9 @@ static uint16_t calculate_port_fps(int port_idx)
     }
     
     // Return estimate based on current count and elapsed time
-    // Optimize division: use shift when possible, or precalculated approximation
     if (window_duration > 100000 && frame_count[port_idx] > 0) {
-        // Additional safety check to prevent division by zero
-        if (window_duration == 0) {
-            return 0;
-        }
-        // Use fixed-point arithmetic to avoid division on every call
-        // fps = (count * 1000000) / duration ≈ count * (1000000 / duration)
+        // Use fixed-point arithmetic for FPS calculation
+        // fps = (count * 1000000) / duration
         uint16_t fps = (uint16_t)(((uint64_t)frame_count[port_idx] * 1000000ULL) / window_duration);
         return fps;
     }
