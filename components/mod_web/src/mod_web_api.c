@@ -25,35 +25,18 @@ static const char *TAG = "MOD_WEB_API";
 /* ========== HELPER FUNCTIONS ========== */
 
 /**
- * @brief Calculate FPS for a DMX port based on recent activity
+ * @brief Get FPS for a DMX port
  * 
- * Provides a simple estimate based on activity timing.
+ * Uses sys_get_port_fps() for accurate FPS calculation.
  */
-static uint16_t calculate_port_fps_estimate(int port_idx)
+static uint16_t get_port_fps(int port_idx)
 {
     if (port_idx < 0 || port_idx >= 4) {
         return 0;
     }
     
-    int64_t last_activity = sys_get_last_activity(port_idx);
-    int64_t now = esp_timer_get_time();
-    
-    // If no activity, return 0
-    if (last_activity == 0) {
-        return 0;
-    }
-    
-    // If activity within last 100ms, estimate based on typical DMX rate
-    int64_t time_since_activity = now - last_activity;
-    if (time_since_activity < 100000) { // 100ms
-        // Active - return typical DMX rate (30-44 fps is common)
-        const sys_config_t *cfg = sys_get_config();
-        if (cfg && cfg->ports[port_idx].enabled) {
-            return 40; // Typical sACN/Art-Net rate
-        }
-    }
-    
-    return 0; // No recent activity
+    // Use the accurate FPS tracker from sys_mod
+    return sys_get_port_fps(port_idx);
 }
 
 /* ========== SYSTEM API HANDLERS ========== */
@@ -304,7 +287,7 @@ esp_err_t mod_web_api_dmx_status(httpd_req_t *req)
         cJSON_AddBoolToObject(port, "enabled", port_cfg.enabled);
 
         // Calculate FPS from activity with improved estimation
-        uint16_t fps = calculate_port_fps_estimate(i);
+        uint16_t fps = get_port_fps(i);
         cJSON_AddNumberToObject(port, "fps", fps);
 
         // Backend type (RMT or UART - simplified)
@@ -847,7 +830,7 @@ esp_err_t mod_web_api_system_health(httpd_req_t *req)
         cJSON_AddBoolToObject(port, "active", time_since_activity < 2000);
         
         // FPS estimate
-        uint16_t fps = calculate_port_fps_estimate(i);
+        uint16_t fps = get_port_fps(i);
         cJSON_AddNumberToObject(port, "fps", fps);
         
         cJSON_AddItemToArray(ports, port);
