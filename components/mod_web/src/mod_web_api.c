@@ -642,26 +642,31 @@ esp_err_t mod_web_api_file_import(httpd_req_t *req)
         cJSON *static_ip = cJSON_GetObjectItem(net_obj, "static_ip");
         if (static_ip && cJSON_IsString(static_ip)) {
             strncpy(new_net.static_ip, cJSON_GetStringValue(static_ip), sizeof(new_net.static_ip) - 1);
+            new_net.static_ip[sizeof(new_net.static_ip) - 1] = '\0'; // Ensure null termination
         }
         
         cJSON *static_netmask = cJSON_GetObjectItem(net_obj, "static_netmask");
         if (static_netmask && cJSON_IsString(static_netmask)) {
             strncpy(new_net.static_netmask, cJSON_GetStringValue(static_netmask), sizeof(new_net.static_netmask) - 1);
+            new_net.static_netmask[sizeof(new_net.static_netmask) - 1] = '\0';
         }
         
         cJSON *static_gateway = cJSON_GetObjectItem(net_obj, "static_gateway");
         if (static_gateway && cJSON_IsString(static_gateway)) {
             strncpy(new_net.static_gateway, cJSON_GetStringValue(static_gateway), sizeof(new_net.static_gateway) - 1);
+            new_net.static_gateway[sizeof(new_net.static_gateway) - 1] = '\0';
         }
         
         cJSON *wifi_ssid = cJSON_GetObjectItem(net_obj, "wifi_ssid");
         if (wifi_ssid && cJSON_IsString(wifi_ssid)) {
             strncpy(new_net.wifi_ssid, cJSON_GetStringValue(wifi_ssid), sizeof(new_net.wifi_ssid) - 1);
+            new_net.wifi_ssid[sizeof(new_net.wifi_ssid) - 1] = '\0';
         }
         
         cJSON *wifi_psk = cJSON_GetObjectItem(net_obj, "wifi_psk");
         if (wifi_psk && cJSON_IsString(wifi_psk)) {
             strncpy(new_net.wifi_psk, cJSON_GetStringValue(wifi_psk), sizeof(new_net.wifi_psk) - 1);
+            new_net.wifi_psk[sizeof(new_net.wifi_psk) - 1] = '\0';
         }
         
         cJSON *wifi_enabled = cJSON_GetObjectItem(net_obj, "wifi_enabled");
@@ -721,11 +726,13 @@ esp_err_t mod_web_api_file_import(httpd_req_t *req)
     }
 
     // Failsafe configuration
+    bool failsafe_skipped = false;
     cJSON *failsafe_obj = cJSON_GetObjectItem(json, "failsafe");
     if (failsafe_obj && cJSON_IsObject(failsafe_obj)) {
         // Note: Need to add sys_update_failsafe_cfg function to sys_mod
         // For now, log that it's not yet implemented
         ESP_LOGW(TAG, "Failsafe config import not yet implemented in sys_mod");
+        failsafe_skipped = true;
     }
 
     cJSON_Delete(json);
@@ -733,9 +740,12 @@ esp_err_t mod_web_api_file_import(httpd_req_t *req)
     // Force save to NVS
     sys_save_config_now();
 
-    // Send success response
+    // Send success response with note about skipped items
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
+    if (failsafe_skipped) {
+        cJSON_AddStringToObject(root, "warning", "Failsafe configuration was not imported (not yet implemented)");
+    }
     cJSON_AddStringToObject(root, "message", "Configuration imported successfully");
 
     esp_err_t resp_ret = mod_web_json_send_response(req, root);
@@ -767,8 +777,18 @@ esp_err_t mod_web_api_system_ota(httpd_req_t *req)
     // 4. esp_ota_set_boot_partition() to mark new partition
     // 5. esp_restart() to reboot
     
-    // For now, return error indicating it needs implementation
-    return mod_web_error_send_500(req, "OTA functionality not yet implemented");
+    // Return 501 Not Implemented (more accurate than 500)
+    httpd_resp_set_status(req, "501 Not Implemented");
+    httpd_resp_set_type(req, "application/json");
+    
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "error");
+    cJSON_AddStringToObject(root, "error", "OTA functionality not yet implemented");
+    
+    esp_err_t ret = mod_web_json_send_response(req, root);
+    cJSON_Delete(root);
+    
+    return ret;
 }
 
 /* ========== HEALTH/TELEMETRY API HANDLER ========== */

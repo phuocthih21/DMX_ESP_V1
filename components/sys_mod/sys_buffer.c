@@ -49,7 +49,8 @@ static uint16_t fps_tracker_calculate(int port_idx) {
     // Need at least 2 samples to calculate FPS
     if (tracker->count < 2) return 0;
     
-    // Get oldest and newest timestamps
+    // Calculate the index of the oldest sample by going back tracker->count 
+    // positions from the current write position in the circular buffer
     uint32_t oldest_idx = (tracker->write_idx + FPS_WINDOW_SIZE - tracker->count) % FPS_WINDOW_SIZE;
     uint32_t newest_idx = (tracker->write_idx + FPS_WINDOW_SIZE - 1) % FPS_WINDOW_SIZE;
     
@@ -63,7 +64,8 @@ static uint16_t fps_tracker_calculate(int port_idx) {
     
     // Calculate FPS: (count - 1) packets / time_diff_seconds
     // time_diff is in microseconds, so divide by 1,000,000
-    uint64_t fps = ((uint64_t)(tracker->count - 1) * 1000000) / time_diff;
+    // Note: tracker->count is capped at 100, so (count - 1) * 1000000 <= 99,000,000 (no overflow)
+    uint64_t fps = ((uint64_t)(tracker->count - 1) * 1000000ULL) / (uint64_t)time_diff;
     
     // Cap at reasonable max
     if (fps > 200) fps = 200;
