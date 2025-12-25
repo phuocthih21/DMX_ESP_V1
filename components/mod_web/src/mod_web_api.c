@@ -11,6 +11,7 @@
 #include "mod_web_error.h"
 #include "sys_mod.h"
 #include "mod_net.h"
+#include "mod_proto.h"
 #include "mod_web_auth.h"
 #include "dmx_types.h"
 #include "esp_log.h"
@@ -837,10 +838,18 @@ esp_err_t mod_web_api_system_health(httpd_req_t *req)
     }
     cJSON_AddItemToObject(root, "ports", ports);
 
-    // Protocol telemetry (if available)
-    // TODO: Add protocol metrics from mod_proto when available
+    // Protocol telemetry
     cJSON *telemetry = cJSON_CreateObject();
-    cJSON_AddStringToObject(telemetry, "note", "Protocol metrics integration pending");
+    
+    // Get protocol metrics
+    mod_proto_metrics_t proto_metrics;
+    mod_proto_get_metrics(&proto_metrics);
+    
+    cJSON_AddNumberToObject(telemetry, "malformed_artnet_packets", proto_metrics.malformed_artnet_packets);
+    cJSON_AddNumberToObject(telemetry, "malformed_sacn_packets", proto_metrics.malformed_sacn_packets);
+    cJSON_AddNumberToObject(telemetry, "socket_errors", proto_metrics.socket_errors);
+    cJSON_AddNumberToObject(telemetry, "igmp_failures", proto_metrics.igmp_failures);
+    
     cJSON_AddItemToObject(root, "telemetry", telemetry);
 
     esp_err_t resp_ret = mod_web_json_send_response(req, root);
