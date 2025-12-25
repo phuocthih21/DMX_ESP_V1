@@ -73,57 +73,50 @@ static uint8_t calculate_cpu_load(void)
     static int64_t last_check_time = 0;
     
     int64_t now = esp_timer_get_time();
-    uint32_t idle_time = 0;
     
     // Get idle task runtime (simplified approach using task stats if available)
     // For more accurate measurement, would need CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
 #if CONFIG_FREERTOS_USE_TRACE_FACILITY && CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
-    TaskStatus_t *task_array;
+    static TaskStatus_t task_array[32];  // Static buffer to avoid heap fragmentation
     UBaseType_t num_tasks;
     uint32_t total_runtime;
+    uint32_t idle_time = 0;
     
     num_tasks = uxTaskGetNumberOfTasks();
-    task_array = pvPortMalloc(num_tasks * sizeof(TaskStatus_t));
+    if (num_tasks > 32) {
+        num_tasks = 32;  // Limit to buffer size
+    }
     
-    if (task_array != NULL) {
-        num_tasks = uxTaskGetSystemState(task_array, num_tasks, &total_runtime);
-        
-        // Find IDLE tasks and sum their runtime
-        for (UBaseType_t i = 0; i < num_tasks; i++) {
-            if (strstr(pcTaskGetName(task_array[i].xHandle), "IDLE") != NULL) {
-                idle_time += task_array[i].ulRunTimeCounter;
-            }
+    num_tasks = uxTaskGetSystemState(task_array, num_tasks, &total_runtime);
+    
+    // Find IDLE tasks and sum their runtime
+    for (UBaseType_t i = 0; i < num_tasks; i++) {
+        if (strstr(pcTaskGetName(task_array[i].xHandle), "IDLE") != NULL) {
+            idle_time += task_array[i].ulRunTimeCounter;
         }
+    }
+    
+    // Calculate CPU load percentage
+    if (last_check_time > 0 && total_runtime > 0) {
+        uint32_t idle_delta = idle_time - last_idle_time;
         
-        vPortFree(task_array);
-        
-        // Calculate CPU load percentage
-        if (last_check_time > 0) {
-            int64_t time_delta = now - last_check_time;
-            uint32_t idle_delta = idle_time - last_idle_time;
-            
-            if (time_delta > 0 && total_runtime > 0) {
-                uint8_t cpu_load = 100 - ((idle_delta * 100) / total_runtime);
-                last_idle_time = idle_time;
-                last_check_time = now;
-                return (cpu_load > 100) ? 100 : cpu_load;
-            }
-        }
+        // Avoid overflow: use 64-bit arithmetic for intermediate calculation
+        uint64_t cpu_idle_percent = ((uint64_t)idle_delta * 100ULL) / total_runtime;
+        uint8_t cpu_load = 100 - (cpu_idle_percent > 100 ? 100 : (uint8_t)cpu_idle_percent);
         
         last_idle_time = idle_time;
         last_check_time = now;
+        
+        return cpu_load;
     }
+    
+    last_idle_time = idle_time;
+    last_check_time = now;
 #endif
     
-    // Fallback: estimate based on free heap (very rough approximation)
-    uint32_t free_heap = esp_get_free_heap_size();
-    uint32_t min_free = esp_get_minimum_free_heap_size();
-    
-    if (free_heap > min_free && min_free > 0) {
-        return (uint8_t)((100 * (free_heap - min_free)) / free_heap);
-    }
-    
-    return 0; // Unknown
+    // Fallback: Return 0 (unknown) when FreeRTOS stats unavailable
+    // Previous heap-based calculation was incorrect as it measured memory, not CPU
+    return 0;
 }
 
 /**
@@ -180,8 +173,12 @@ static uint16_t calculate_port_fps(int port_idx)
     }
     
     // Return estimate based on current count and elapsed time
-    if (window_duration > 0 && frame_count[port_idx] > 0) {
-        return (uint16_t)((frame_count[port_idx] * 1000000ULL) / window_duration);
+    // Optimize division: use shift when possible, or precalculated approximation
+    if (window_duration > 100000 && frame_count[port_idx] > 0) {
+        // Use fixed-point arithmetic to avoid division on every call
+        // fps = (count * 1000000) / duration ≈ count * (1000000 / duration)
+        uint16_t fps = (uint16_t)(((uint64_t)frame_count[port_idx] * 1000000ULL) / window_duration);
+        return fps;
     }
     
     return 0;

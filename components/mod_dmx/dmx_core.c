@@ -195,8 +195,8 @@ void dmx_apply_new_timing(int port, const dmx_timing_t* timing)
     // The task loop will use this on the next frame iteration
     if (memcmp(timing, &s_ports[port].timing, sizeof(dmx_timing_t)) != 0) {
         s_ports[port].timing = *timing;
-        ESP_LOGI(TAG, "Port %d timing updated immediately (MAB=%u, MBB=%u)", 
-                 port, timing->mab_us, timing->mbb_us);
+        ESP_LOGI(TAG, "Port %d timing updated immediately (break=%u, mab=%u, rate=%u)", 
+                 port, timing->break_us, timing->mab_us, timing->refresh_rate);
     }
 }
 
