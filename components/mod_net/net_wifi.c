@@ -36,10 +36,12 @@ esp_err_t net_wifi_start_sta(const char* ssid, const char* pass) {
 
     wifi_config_t wifi_config = {0};
     if (ssid) {
-        strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+        strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+        wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
     }
     if (pass) {
-        strncpy((char*)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
+        strncpy((char*)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password) - 1);
+        wifi_config.sta.password[sizeof(wifi_config.sta.password) - 1] = '\0';
     }
 
     ret = esp_wifi_set_mode(WIFI_MODE_STA);
@@ -86,11 +88,13 @@ esp_err_t net_wifi_start_ap(const char* ssid, const char* pass) {
 
     wifi_config_t wifi_config = {0};
     if (ssid) {
-        strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
+        strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
+        wifi_config.ap.ssid[sizeof(wifi_config.ap.ssid) - 1] = '\0';
         wifi_config.ap.ssid_len = strlen(ssid);
     }
     if (pass) {
-        strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
+        strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password) - 1);
+        wifi_config.ap.password[sizeof(wifi_config.ap.password) - 1] = '\0';
         wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     } else {
         wifi_config.ap.authmode = WIFI_AUTH_OPEN;

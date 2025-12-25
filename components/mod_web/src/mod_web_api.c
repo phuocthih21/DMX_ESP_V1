@@ -483,12 +483,15 @@ esp_err_t mod_web_api_network_config(httpd_req_t *req)
 
         if (ip != NULL && cJSON_IsString(ip)) {
             strncpy(new_net.ip, ip->valuestring, sizeof(new_net.ip) - 1);
+            new_net.ip[sizeof(new_net.ip) - 1] = '\0';
         }
         if (netmask != NULL && cJSON_IsString(netmask)) {
             strncpy(new_net.netmask, netmask->valuestring, sizeof(new_net.netmask) - 1);
+            new_net.netmask[sizeof(new_net.netmask) - 1] = '\0';
         }
         if (gateway != NULL && cJSON_IsString(gateway)) {
             strncpy(new_net.gateway, gateway->valuestring, sizeof(new_net.gateway) - 1);
+            new_net.gateway[sizeof(new_net.gateway) - 1] = '\0';
         }
     }
 
@@ -500,9 +503,11 @@ esp_err_t mod_web_api_network_config(httpd_req_t *req)
 
         if (ssid != NULL && cJSON_IsString(ssid)) {
             strncpy(new_net.wifi_ssid, ssid->valuestring, sizeof(new_net.wifi_ssid) - 1);
+            new_net.wifi_ssid[sizeof(new_net.wifi_ssid) - 1] = '\0';
         }
         if (password != NULL && cJSON_IsString(password)) {
             strncpy(new_net.wifi_pass, password->valuestring, sizeof(new_net.wifi_pass) - 1);
+            new_net.wifi_pass[sizeof(new_net.wifi_pass) - 1] = '\0';
         }
     }
 

@@ -37,7 +37,7 @@ static void hash_password_hex(const char *password, char out_hex[65])
     /* Use mbedtls_sha256 (older and newer mbedtls variants may provide either name) */
     mbedtls_sha256((const unsigned char *)password, strlen(password), digest, 0);
     for (int i = 0; i < 32; i++) {
-        sprintf(out_hex + (i * 2), "%02x", digest[i]);
+        snprintf(out_hex + (i * 2), 3, "%02x", digest[i]);
     }
     out_hex[64] = '\0';
 }
@@ -124,7 +124,7 @@ char *mod_web_auth_generate_token(size_t expiry_seconds)
         rb[i] = (unsigned char)(esp_random() & 0xFF);
     }
     for (int i = 0; i < 32; i++) {
-        sprintf(&s_token[i * 2], "%02x", rb[i]);
+        snprintf(&s_token[i * 2], 3, "%02x", rb[i]);
     }
     s_token[64] = '\0';
     int64_t now_us = esp_timer_get_time();
