@@ -62,6 +62,129 @@ static uint32_t get_timestamp_ms(void)
 }
 
 /**
+ * @brief Calculate CPU load percentage from idle task stats
+ * 
+ * Returns approximate CPU load (0-100) by measuring idle task runtime.
+ * Note: This is a simplified implementation using idle task counters.
+ */
+static uint8_t calculate_cpu_load(void)
+{
+    static uint32_t last_idle_time = 0;
+    static uint32_t last_total_runtime = 0;
+    
+    // Get idle task runtime (simplified approach using task stats if available)
+    // For more accurate measurement, would need CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+#if CONFIG_FREERTOS_USE_TRACE_FACILITY && CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+    static TaskStatus_t task_array[32];  // Static buffer to avoid heap fragmentation
+    UBaseType_t num_tasks;
+    uint32_t total_runtime;
+    uint32_t idle_time = 0;
+    
+    num_tasks = uxTaskGetNumberOfTasks();
+    if (num_tasks > 32) {
+        num_tasks = 32;  // Limit to buffer size
+    }
+    
+    num_tasks = uxTaskGetSystemState(task_array, num_tasks, &total_runtime);
+    
+    // Find IDLE tasks and sum their runtime
+    for (UBaseType_t i = 0; i < num_tasks; i++) {
+        const char* task_name = pcTaskGetName(task_array[i].xHandle);
+        if (strncmp(task_name, "IDLE", 4) == 0) {
+            idle_time += task_array[i].ulRunTimeCounter;
+        }
+    }
+    
+    // Calculate CPU load percentage using deltas
+    if (last_total_runtime > 0) {
+        uint32_t idle_delta = idle_time - last_idle_time;
+        uint32_t total_delta = total_runtime - last_total_runtime;
+        
+        if (total_delta > 0) {
+            // Avoid overflow: use 64-bit arithmetic for intermediate calculation
+            uint64_t cpu_idle_percent = ((uint64_t)idle_delta * 100ULL) / total_delta;
+            uint8_t cpu_load = 100 - (cpu_idle_percent > 100 ? 100 : (uint8_t)cpu_idle_percent);
+            
+            last_idle_time = idle_time;
+            last_total_runtime = total_runtime;
+            
+            return cpu_load;
+        }
+    }
+    
+    last_idle_time = idle_time;
+    last_total_runtime = total_runtime;
+#endif
+    
+    // Fallback: Return 0 (unknown) when FreeRTOS stats unavailable
+    return 0;
+}
+
+/**
+ * @brief Calculate FPS for a DMX port based on activity timestamps
+ * 
+ * Tracks frame intervals and calculates actual FPS over a short window.
+ */
+static uint16_t calculate_port_fps(int port_idx)
+{
+    static int64_t last_activity[4] = {0};
+    static uint16_t frame_count[4] = {0};
+    static int64_t window_start[4] = {0};
+    
+    if (port_idx < 0 || port_idx >= 4) {
+        return 0;
+    }
+    
+    int64_t current_activity = sys_get_last_activity(port_idx);
+    int64_t now = esp_timer_get_time();
+    
+    // If no activity or port disabled, return 0
+    if (current_activity == 0) {
+        frame_count[port_idx] = 0;
+        window_start[port_idx] = 0;
+        return 0;
+    }
+    
+    // Check if there's been activity since last check
+    if (current_activity != last_activity[port_idx]) {
+        frame_count[port_idx]++;
+        last_activity[port_idx] = current_activity;
+        
+        // Initialize window on first frame
+        if (window_start[port_idx] == 0) {
+            window_start[port_idx] = now;
+        }
+    }
+    
+    // Calculate FPS over a 1-second window
+    int64_t window_duration = now - window_start[port_idx];
+    if (window_duration >= 1000000) { // 1 second
+        uint16_t fps = frame_count[port_idx];
+        
+        // Reset for next window
+        frame_count[port_idx] = 0;
+        window_start[port_idx] = now;
+        
+        return fps;
+    }
+    
+    // If within window and no recent activity (> 100ms ago), likely 0 FPS
+    if ((now - current_activity) > 100000) {
+        return 0;
+    }
+    
+    // Return estimate based on current count and elapsed time
+    if (window_duration > 100000 && frame_count[port_idx] > 0) {
+        // Use fixed-point arithmetic for FPS calculation
+        // fps = (count * 1000000) / duration
+        uint16_t fps = (uint16_t)(((uint64_t)frame_count[port_idx] * 1000000ULL) / window_duration);
+        return fps;
+    }
+    
+    return 0;
+}
+
+/**
  * @brief Check and reset rate limit counter
  * 
  * Per spec: Max 20 msg/sec
@@ -204,7 +327,7 @@ static void ws_send_system_status(void)
 {
     uint32_t uptime_sec = (uint32_t)(esp_timer_get_time() / 1000000);
     uint32_t free_heap = esp_get_free_heap_size();
-    uint8_t cpu_load = 0; // TODO: Calculate from FreeRTOS stats
+    uint8_t cpu_load = calculate_cpu_load();
     
     // Build data object
     cJSON *data = cJSON_CreateObject();
@@ -237,12 +360,8 @@ static void ws_send_dmx_port_status(int port_idx)
     // Copy to local variable to avoid packed member address warning
     dmx_port_cfg_t port_cfg = cfg->ports[port_idx];
     
-    // Calculate FPS (simplified - TODO: proper calculation)
-    int64_t last_activity = sys_get_last_activity(port_idx);
-    uint16_t fps = 0;
-    if (last_activity > 0 && port_cfg.enabled) {
-        fps = 40; // Simplified
-    }
+    // Calculate actual FPS from activity tracking
+    uint16_t fps = calculate_port_fps(port_idx);
     
     // Build data object
     cJSON *data = cJSON_CreateObject();
