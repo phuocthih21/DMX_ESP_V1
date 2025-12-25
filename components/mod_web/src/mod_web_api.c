@@ -531,11 +531,15 @@ esp_err_t mod_web_api_network_config(httpd_req_t *req)
     if (err != ESP_OK) {
         return mod_web_error_send_500(req, "Failed to update network config");
     }
+    
+    // Apply changes to active network interfaces immediately
+    net_reload_config();
 
     // Send success response
     // Per MOD_WEB.md: Response format {"status": "ok"}
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "message", "Network configuration updated and applied");
 
     esp_err_t resp_ret = mod_web_json_send_response(req, root);
     cJSON_Delete(root);
@@ -549,6 +553,13 @@ esp_err_t mod_web_api_network_config(httpd_req_t *req)
 esp_err_t mod_web_api_file_export(httpd_req_t *req)
 {
     ESP_LOGD(TAG, "GET /api/file/export");
+
+    // Require auth for sensitive config export
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
 
     // Get system configuration
     const sys_config_t *cfg = sys_get_config();
@@ -608,6 +619,13 @@ esp_err_t mod_web_api_file_export(httpd_req_t *req)
 esp_err_t mod_web_api_file_import(httpd_req_t *req)
 {
     ESP_LOGD(TAG, "POST /api/file/import");
+
+    // Require auth for sensitive config import
+    if (mod_web_auth_is_enabled()) {
+        if (!mod_web_auth_check_request(req)) {
+            return mod_web_error_send_401(req, "Authentication required");
+        }
+    }
 
     // Receive JSON body
     cJSON *json = NULL;
