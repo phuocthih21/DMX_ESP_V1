@@ -209,7 +209,10 @@ void net_reload_config(void) {
                 if (esp_netif_dhcpc_get_status(netif, &dhcp_status) == ESP_OK) {
                     if (dhcp_status == ESP_NETIF_DHCP_STARTED) {
                         ESP_LOGI(TAG, "Stopping DHCP client on netif");
-                        esp_netif_dhcpc_stop(netif);
+                        esp_err_t ret = esp_netif_dhcpc_stop(netif);
+                        if (ret != ESP_OK) {
+                            ESP_LOGW(TAG, "Failed to stop DHCP client: %d", ret);
+                        }
                     }
                 }
                 
@@ -234,7 +237,10 @@ void net_reload_config(void) {
             if (esp_netif_dhcpc_get_status(netif, &dhcp_status) == ESP_OK) {
                 if (dhcp_status != ESP_NETIF_DHCP_STARTED) {
                     ESP_LOGI(TAG, "Starting DHCP client on netif");
-                    esp_netif_dhcpc_start(netif);
+                    esp_err_t ret = esp_netif_dhcpc_start(netif);
+                    if (ret != ESP_OK) {
+                        ESP_LOGW(TAG, "Failed to start DHCP client: %d", ret);
+                    }
                 }
             }
             netif = esp_netif_next(netif);
