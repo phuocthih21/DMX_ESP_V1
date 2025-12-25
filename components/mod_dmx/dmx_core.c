@@ -191,12 +191,13 @@ void dmx_apply_new_timing(int port, const dmx_timing_t* timing)
         return;
     }
     
-    // Timing is automatically read from g_sys_config each frame in the task loop.
-    // This function exists for API Contract compliance and can be used to
-    // force immediate update if needed. The actual update happens in the next frame.
-    // For now, we just validate - the task loop will pick up the change.
-    (void)port;
-    (void)timing;
+    // Force immediate timing update by directly writing to port context
+    // The task loop will use this on the next frame iteration
+    if (memcmp(timing, &s_ports[port].timing, sizeof(dmx_timing_t)) != 0) {
+        s_ports[port].timing = *timing;
+        ESP_LOGI(TAG, "Port %d timing updated immediately (MAB=%u, MBB=%u)", 
+                 port, timing->mab_us, timing->mbb_us);
+    }
 }
 
 esp_err_t dmx_driver_init(const sys_config_t* cfg)

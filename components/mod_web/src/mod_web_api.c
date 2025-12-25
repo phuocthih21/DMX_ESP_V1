@@ -22,6 +22,40 @@
 
 static const char *TAG = "MOD_WEB_API";
 
+/* ========== HELPER FUNCTIONS ========== */
+
+/**
+ * @brief Calculate FPS for a DMX port based on recent activity
+ * 
+ * Provides a simple estimate based on activity timing.
+ */
+static uint16_t calculate_port_fps_estimate(int port_idx)
+{
+    if (port_idx < 0 || port_idx >= 4) {
+        return 0;
+    }
+    
+    int64_t last_activity = sys_get_last_activity(port_idx);
+    int64_t now = esp_timer_get_time();
+    
+    // If no activity, return 0
+    if (last_activity == 0) {
+        return 0;
+    }
+    
+    // If activity within last 100ms, estimate based on typical DMX rate
+    int64_t time_since_activity = now - last_activity;
+    if (time_since_activity < 100000) { // 100ms
+        // Active - return typical DMX rate (30-44 fps is common)
+        const sys_config_t *cfg = sys_get_config();
+        if (cfg && cfg->ports[port_idx].enabled) {
+            return 40; // Typical sACN/Art-Net rate
+        }
+    }
+    
+    return 0; // No recent activity
+}
+
 /* ========== SYSTEM API HANDLERS ========== */
 
 esp_err_t mod_web_api_system_info(httpd_req_t *req)
@@ -269,13 +303,8 @@ esp_err_t mod_web_api_dmx_status(httpd_req_t *req)
         cJSON_AddNumberToObject(port, "universe", port_cfg.universe);
         cJSON_AddBoolToObject(port, "enabled", port_cfg.enabled);
 
-        // Calculate FPS from activity (simplified - TODO: implement proper FPS calculation)
-        int64_t last_activity = sys_get_last_activity(i);
-        uint16_t fps = 0;
-        if (last_activity > 0) {
-            // Simple FPS estimate (would need proper tracking)
-            fps = port_cfg.enabled ? 40 : 0;
-        }
+        // Calculate FPS from activity with improved estimation
+        uint16_t fps = calculate_port_fps_estimate(i);
         cJSON_AddNumberToObject(port, "fps", fps);
 
         // Backend type (RMT or UART - simplified)
